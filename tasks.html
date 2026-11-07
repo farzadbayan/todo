@@ -99,6 +99,10 @@ sup{font-size:clamp(13px,3.6vw,16px);font-weight:400;letter-spacing:0;vertical-a
 textarea{all:unset;display:block;width:100%;white-space:pre-wrap;overflow-wrap:anywhere;resize:none;overflow:hidden}
 .title{font-size:clamp(30px,8.4vw,40px);font-weight:700;letter-spacing:-.025em;line-height:1.08;padding-bottom:18px;border-bottom:1px solid var(--rule)}
 .notes{font-size:19px;line-height:1.45;color:var(--txt);min-height:140px;padding:16px 0}
+[hidden]{display:none!important}
+.nv{white-space:pre-wrap;overflow-wrap:anywhere;cursor:text}
+.nv a{color:var(--ink);text-decoration:underline;text-decoration-color:var(--soft);text-underline-offset:3px}
+.nv a:hover{text-decoration-color:var(--ink)}
 .done{height:36px;padding:0 14px 0 10px;border-radius:18px;border:1.2px solid var(--ink);background:none;display:inline-flex;align-items:center;gap:6px;cursor:pointer;margin-top:18px;color:var(--ink);font-size:15px;transition:background .15s,color .15s}
 .done svg{width:18px;height:18px}
 .done.on{background:var(--ink);color:var(--bg)}
@@ -341,8 +345,9 @@ function render() {
     app.innerHTML = `<div id="tv">
       <div class="path">${p ? esc(p.name) + ' / ' : ''}${esc(c ? c.name : '')}</div>
       <textarea class="title" data-f="title" rows="1">${esc(t.title)}</textarea>
-      <textarea class="notes" data-f="notes" rows="4">${esc(t.notes)}</textarea>
-      <div class="links">${linksHtml(t.notes, t.link)}</div>
+      <div class="notes nv" data-act="editnotes">${notesHtml(t.notes)}</div>
+      <textarea class="notes" data-f="notes" rows="4" hidden>${esc(t.notes)}</textarea>
+      <div class="links">${linksHtml('', t.link)}</div>
       <div class="daterow"><button class="date" data-act="pick" data-for="" aria-label="Date">${I.cal}<span>${fmtD(t.due)}</span></button>${t.due ? `<button class="ib sm" data-act="nodate" aria-label="Clear date">${I.x}</button>` : ''}<button class="ib sm" data-act="attach" aria-label="Attach">${I.clip}</button><input id="file" type="file" multiple hidden></div>
       ${attsHtml(t)}
       <button class="done ${t.done ? 'on' : ''}" data-act="done">${I.check}<span>${t.done ? 'Completed' : 'Mark as complete'}</span></button>
@@ -409,6 +414,16 @@ function fit(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight +
 /* ---------- events ---------- */
 let armTimer;
 /* ---------- links in notes ---------- */
+const notesHtml = txt => esc(txt || '').replace(/https?:\/\/[^\s<>"']+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
+function editNotes() {
+  const v = app.querySelector('.nv'), ta = app.querySelector('textarea.notes'); if (!v || !ta) return;
+  v.hidden = true; ta.hidden = false; fit(ta); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+}
+document.addEventListener('focusout', e => {
+  if (!e.target.matches || !e.target.matches('textarea.notes')) return;
+  const v = app.querySelector('.nv'); if (!v) return;
+  v.innerHTML = notesHtml(e.target.value); e.target.hidden = true; v.hidden = false;
+});
 const SLACK_RE = /\s*https?:\/\/[\w.-]*slack\.com\/archives\/[^\s<>"]+/g;
 function migrate() {
   let ch = false;
@@ -654,6 +669,7 @@ document.addEventListener('click', e => {
   else if (act === 'ctxsub') { open.add(id); ls('open', JSON.stringify([...open])); adding = { parent: id }; render(); const el = app.querySelector(`[data-new="${id}"]`); el && el.focus(); }
   else if (act === 'ctxdone') { closeMenu(); const t = state.tasks.find(x => x.id === id); if (t) { t.done = !t.done; t.doneAt = t.done ? Date.now() : null; save(300); render(); } }
   else if (act === 'ctxdel') { closeMenu(); dropTask(id); save(300); render(); }
+  else if (act === 'editnotes') { if (!e.target.closest('a')) editNotes(); }
   else if (act === 'attach') document.getElementById('file').click();
   else if (act === 'att') openAtt(b.dataset.path);
   else if (act === 'attdel') { const t = state.tasks.find(x => x.id === vid); if (t) { removeFile(t, id); render(); } }
@@ -702,7 +718,7 @@ document.addEventListener('keydown', e => {
     if (name) { const c = { id: uid(), name, parent }; state.cats.push(c); if (parent) open.add(parent); ls('open', JSON.stringify([...open])); save(); }
     el.value = ''; render();
   } else if (el.dataset.f === 'title') {
-    e.preventDefault(); app.querySelector('.notes').focus();
+    e.preventDefault(); editNotes();
   } else if (el.id === 'tok') saveKey();
 });
 
@@ -729,7 +745,7 @@ document.addEventListener('input', e => {
   const t = state.tasks.find(x => x.id === vid); if (!t) return;
   t[f] = f === 'title' ? el.value.replace(/\n/g, ' ') : el.value;
   fit(el); save(1200);
-  if (f === 'notes') { const l = app.querySelector('.links'); if (l) l.innerHTML = linksHtml(el.value, t.link); }
+  
 });
 
 /* ---------- start ---------- */
