@@ -242,7 +242,14 @@ async function push(retry = 2) {
       if (ser() === snap) { dirty = false; ls('dirty', '0'); }
     } else if (retry && (r.status === 409 || r.status === 422 || r.status === 404)) {
       const g = await gh('GET');
-      if (g.ok) sha = (await g.json()).sha;
+      if (g.ok) {
+        const j = await g.json(); sha = j.sha;
+        try { // keep tasks the Slack sync added meanwhile
+          const rem = JSON.parse(dec(j.content)), mine = new Set(state.tasks.map(t => t.id)), imp = new Set(state.imported || []);
+          (rem.tasks || []).forEach(t => { if (t.src && !mine.has(t.id) && !imp.has(t.src)) state.tasks.push(t); });
+          state.imported = [...new Set([...(state.imported || []), ...(rem.imported || [])])];
+        } catch (e) {}
+      }
       else if (g.status === 404) { sha = null; if (CFG.branch) await ensureBranch(); }
       busy = false; return push(retry - 1);
     }
