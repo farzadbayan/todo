@@ -260,7 +260,7 @@ function catBlock(c, lvl) {
     <button class="row" data-act="toggle" data-id="${c.id}"><span class="name">${esc(c.name)}${sup(openCount(c.id))}</span><span class="tog">${isOpen ? I.minus : I.plus}</span></button>
     ${isOpen ? `<div class="body">
       <ul class="tasks">${todo.map(taskLi).join('')}</ul>
-      <div class="add${pend[c.id] ? ' typing' : ''}">${I.plus}<input data-add="${c.id}" enterkeyhint="done" autocomplete="off" aria-label="Add task"><button class="dm${pend[c.id] ? ' on' : ''}" data-act="pick" data-for="${c.id}" aria-label="Date">${pend[c.id] ? fmtD(pend[c.id]) : I.cal}</button></div>
+      ${subs.length ? '' : `<div class="add${pend[c.id] ? ' typing' : ''}">${I.plus}<input data-add="${c.id}" enterkeyhint="done" autocomplete="off" aria-label="Add task"><button class="dm${pend[c.id] ? ' on' : ''}" data-act="pick" data-for="${c.id}" aria-label="Date">${pend[c.id] ? fmtD(pend[c.id]) : I.cal}</button></div>`}
       ${subs.map(s => catBlock(s, lvl + 1)).join('')}
       ${adding && adding.parent === c.id ? `<div class="newcat sub"><input data-new="${c.id}" enterkeyhint="done" autocomplete="off"></div>` : ''}
     </div>` : ''}
