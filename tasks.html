@@ -147,6 +147,8 @@ const gh = (method, body, p = 'contents/' + CFG.path) =>
   });
 
 let timer, busy = false, again = false;
+const oldShas = new Set(JSON.parse(ls('old') || '[]'));
+function retire(x) { if (!x) return; oldShas.add(x); ls('old', JSON.stringify([...oldShas].slice(-50))); }
 function setStatus(s) { status = s; const d = document.querySelector('.dot'); if (d) d.className = 'dot ' + s; }
 function schedule(delay) {
   if (!token) return setStatus('local');
@@ -168,7 +170,7 @@ async function push(retry = 2) {
     const snap = ser();
     const r = await gh('PUT', { message: 'tasks', content: enc(snap), ...(CFG.branch ? { branch: CFG.branch } : {}), ...(sha ? { sha } : {}) });
     if (r.ok) {
-      sha = (await r.json()).content.sha; ls('sha', sha); ok = true;
+      retire(sha); sha = (await r.json()).content.sha; ls('sha', sha); ok = true;
       if (ser() === snap) { dirty = false; ls('dirty', '0'); }
     } else if (retry && (r.status === 409 || r.status === 422 || r.status === 404)) {
       const g = await gh('GET');
@@ -190,7 +192,9 @@ async function pull() {
     const r = await gh('GET');
     if (r.status === 404) { sha = null; busy = false; dirty = true; return push(); }
     if (r.ok) {
-      const j = await r.json(); sha = j.sha; ls('sha', sha); ok = true;
+      const j = await r.json(); ok = true;
+      if (oldShas.has(j.sha) || j.sha === sha) { busy = false; setStatus('ok'); return; } // stale or unchanged
+      sha = j.sha; ls('sha', sha);
       const txt = dec(j.content);
       if (!dirty && txt !== ser()) { state = JSON.parse(txt); ls('state', ser()); render(); }
     }
@@ -243,6 +247,7 @@ function catBlock(c, lvl) {
 }
 
 function render() {
+  clearTimeout(soon);
   const a = document.activeElement;
   // don't clobber an open text editor in task view
   if (view === 't' && a && a.tagName === 'TEXTAREA' && document.getElementById('tv')) return;
@@ -287,6 +292,8 @@ function render() {
   rendering = false;
 }
 let rendering = false;
+let soon;
+function addTask(cat, title) { state.tasks.push({ id: uid(), cat, title, notes: '', done: false, created: Date.now() }); save(); }
 function fit(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
 
 /* ---------- events ---------- */
@@ -342,8 +349,7 @@ document.addEventListener('keydown', e => {
   if (el.dataset.add !== undefined) {
     e.preventDefault();
     const title = el.value.trim(); if (!title) return;
-    state.tasks.push({ id: uid(), cat: el.dataset.add, title, notes: '', done: false, created: Date.now() });
-    el.value = ''; save(); render();
+    addTask(el.dataset.add, title); el.value = ''; render();
   } else if (el.dataset.new !== undefined) {
     e.preventDefault();
     const name = el.value.trim(), parent = el.dataset.new || null;
@@ -357,6 +363,10 @@ document.addEventListener('keydown', e => {
 
 document.addEventListener('focusout', e => {
   const el = e.target;
+  if (!rendering && el.dataset && el.dataset.add !== undefined && el.value.trim()) {
+    addTask(el.dataset.add, el.value.trim()); el.value = '';
+    clearTimeout(soon); soon = setTimeout(render, 250); return;
+  }
   if (rendering || !el.dataset || el.dataset.new === undefined) return;
   setTimeout(() => { if (adding && !el.value.trim() && document.activeElement !== el) { adding = null; render(); } }, 120);
 });
