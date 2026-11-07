@@ -72,6 +72,8 @@ textarea{all:unset;display:block;width:100%;white-space:pre-wrap;overflow-wrap:a
 .atitle svg{width:24px;height:24px;stroke-width:1.2;flex:none}
 .key{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--rule);padding:14px 0;margin-top:20px}
 .key input{all:unset;flex:1;min-width:0;font-size:20px}
+.key.bad{border-bottom-color:#b3261e;animation:sh .3s}
+@keyframes sh{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
 .key>svg{width:22px;height:22px;color:var(--mute);flex:none}
 </style>
 </head>
@@ -83,6 +85,7 @@ textarea{all:unset;display:block;width:100%;white-space:pre-wrap;overflow-wrap:a
 <script>
 /* ---------- config ---------- */
 const CFG = { owner: 'farzadbayan', repo: 'todo-data', branch: null, path: 'tasks.json' };
+const LOCK = {"s": "anDW/3F+eva5F6MIwlgxRg==", "v": "uosbDmtJyv8rfTz4", "c": "xaW7w+BIwVW09EAwsfTTqacYV3RlIoGCfahY9Aiz7P2bacMwvSyP3eWz2tLDFLQ2uz/4yxcxgcr1BIFewTY3J9/DOHI31H0uMqhjLZ0Jblui57iBevB2K7f41fVPKTbtBSMCyVPfYnvukmMmsg==", "i": 600000};
 
 /* ---------- icons ---------- */
 const I = {
@@ -257,7 +260,7 @@ function render() {
       <ul class="tasks">${list.map(t => `<li><button data-act="task" data-id="${t.id}">${esc(t.title) || '·'}</button></li>`).join('')}</ul>`;
   } else if (view === 'k') {
     hd.innerHTML = closeBtn + `<button class="ib" data-act="savekey" aria-label="Save">${I.check}</button>`;
-    app.innerHTML = `<label class="key">${I.key}<input id="tok" type="password" value="${esc(token)}" autocomplete="off" spellcheck="false" enterkeyhint="done"></label>`;
+    app.innerHTML = `<label class="key">${I.key}<input id="tok" type="password" value="" autocomplete="off" spellcheck="false" enterkeyhint="done"></label>`;
   } else {
     hd.innerHTML = `<span class="sp"></span><button class="ib" data-act="key" aria-label="Sync"><span class="dot ${status}"></span></button>`;
     app.innerHTML = `<div class="list">${state.cats.filter(c => !c.parent).map(c => catBlock(c, 0)).join('')}
@@ -297,9 +300,19 @@ document.addEventListener('click', e => {
   else if (act === 'savekey') saveKey();
 });
 
-function saveKey() {
-  token = document.getElementById('tok').value.trim(); ls('token', token);
-  setStatus(token ? 'ok' : 'local'); back(); if (token) pull();
+async function unlock(pw) {
+  const u = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
+  const k = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: u(LOCK.s), iterations: LOCK.i, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+  return new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: u(LOCK.v) }, k, u(LOCK.c)));
+}
+async function saveKey() {
+  const el = document.getElementById('tok'), pw = el.value.trim(); if (!pw) return;
+  el.disabled = true;
+  try { token = await unlock(pw); } catch (e) { el.disabled = false; el.value = ''; el.parentNode.classList.add('bad'); setTimeout(() => el.parentNode.classList.remove('bad'), 600); el.focus(); return; }
+  ls('token', token); setStatus('ok');
+  if (history.state && history.state.app) history.back(); else { history.replaceState(null, '', '#/'); route(); }
+  pull();
 }
 
 document.addEventListener('keydown', e => {
@@ -341,6 +354,7 @@ document.addEventListener('input', e => {
 
 /* ---------- start ---------- */
 if (location.hash.startsWith('#key=')) { token = decodeURIComponent(location.hash.slice(5)).trim(); ls('token', token); status = 'ok'; history.replaceState(null, '', location.pathname); }
+if (!token && !location.hash) history.replaceState(null, '', '#/k');
 route();
 if (dirty) schedule(300); else pull();
 document.addEventListener('visibilitychange', () => { if (!document.hidden) pull(); });
