@@ -136,6 +136,8 @@ textarea{all:unset;display:block;width:100%;white-space:pre-wrap;overflow-wrap:a
 .att-file{all:unset;display:flex;align-items:center;gap:8px;width:100%;padding:6px 0;font-size:16px;color:var(--txt);cursor:pointer;overflow-wrap:anywhere;-webkit-touch-callout:none;user-select:none;-webkit-user-select:none}
 .att-file svg{width:18px;height:18px;flex:none;color:var(--mute)}
 .drop #tv{outline:1.5px dashed var(--mute);outline-offset:12px;border-radius:4px}
+.cat.dropok{background:var(--chip);box-shadow:-12px 0 0 var(--chip),12px 0 0 var(--chip)}
+.menu{max-height:70vh;overflow:auto}
 .lb{position:fixed;inset:0;z-index:30;background:rgba(239,238,234,.97);display:grid;place-items:center;padding:20px;cursor:zoom-out}
 .lb img{max-width:100%;max-height:100%;object-fit:contain}
 .key{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--rule);padding:14px 0;margin-top:20px}
@@ -170,6 +172,7 @@ const I = {
   grid:  '<svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="1"/><path d="M3.5 9.5h17M3.5 14.5h17M9.2 9.5v10M14.8 9.5v10"/></svg>',
   clip:  '<svg viewBox="0 0 24 24"><path d="M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>',
   file:  '<svg viewBox="0 0 24 24"><path d="M14 3.5H6.5v17h11V7z"/><path d="M14 3.5V7h3.5"/></svg>',
+  move:  '<svg viewBox="0 0 24 24"><path d="M4 12h15M14 7l5 5-5 5"/></svg>',
   key:   '<svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l2.5 2.5M14 9l2 2"/></svg>',
 };
 
@@ -274,7 +277,8 @@ const subsOf = id => state.cats.filter(c => c.parent === id);
 const tasksOf = (id, done) => state.tasks.filter(t => t.cat === id && !!t.done === done);
 const openCount = id => tasksOf(id, false).length + subsOf(id).reduce((n, s) => n + openCount(s.id), 0);
 const fmtD = v => { if (!v) return ''; const d = new Date(v + 'T00:00'); return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', ...(d.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) }); };
-const taskLi = t => `<li><button data-act="task" data-id="${t.id}"><span>${esc(t.title) || '·'}</span>${t.due ? `<span class="due">${fmtD(t.due)}</span>` : ''}</button></li>`;
+const canDrag = matchMedia('(hover: hover) and (pointer: fine)').matches;
+const taskLi = t => `<li draggable="${canDrag}" data-drag="${t.id}"><button data-act="task" data-id="${t.id}"><span>${esc(t.title) || '·'}</span>${t.due ? `<span class="due">${fmtD(t.due)}</span>` : ''}</button></li>`;
 const sup = n => n ? `<sup>(${n})</sup>` : '';
 
 /* ---------- routing ---------- */
@@ -365,7 +369,7 @@ function render() {
       return void (rendering = false);
     }
     app.innerHTML = `<div class="cv">${monthHd}<div class="g">${cells}</div></div>
-      <ul class="tasks cvl">${list.map(t => `<li><button data-act="task" data-id="${t.id}"><span>${esc(t.title) || '·'}</span><span class="due">${esc(cname(t))}</span></button></li>`).join('')}</ul>`;
+      <ul class="tasks cvl">${list.map(t => `<li draggable="${canDrag}" data-drag="${t.id}"><button data-act="task" data-id="${t.id}"><span>${esc(t.title) || '·'}</span><span class="due">${esc(cname(t))}</span></button></li>`).join('')}</ul>`;
   } else if (view === 'k') {
     hd.innerHTML = closeBtn + `<button class="ib" data-act="savekey" aria-label="Save">${I.check}</button>`;
     app.innerHTML = `<label class="key">${I.key}<input id="tok" type="password" value="" autocomplete="off" spellcheck="false" enterkeyhint="done"></label>`;
@@ -455,6 +459,26 @@ document.addEventListener('change', e => {
   const id = vid; [...e.target.files].forEach(f => upload(id, f)); e.target.value = '';
 });
 
+/* ---------- drag tasks between categories ---------- */
+let dragId = null;
+function moveTask(id, to) {
+  const t = state.tasks.find(x => x.id === id), c = cat(to);
+  if (!t || !c || subsOf(to).length || t.cat === to) return;
+  t.cat = to; open.add(to); if (c.parent) open.add(c.parent); ls('open', JSON.stringify([...open])); save(300); render();
+}
+const dropCat = e => { const sec = e.target.closest && e.target.closest('.cat:not(.today)'); const row = sec && sec.querySelector(':scope>.row'); const id = row && row.dataset.id; return id && !subsOf(id).length ? { sec, id } : null; };
+const clearDrop = () => document.querySelectorAll('.dropok').forEach(x => x.classList.remove('dropok'));
+document.addEventListener('dragstart', e => {
+  const b = e.target.closest && e.target.closest('[data-drag]'); if (!b) return;
+  dragId = b.dataset.drag; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', dragId); closeMenu();
+});
+document.addEventListener('dragover', e => {
+  if (!dragId) return; const d = dropCat(e); clearDrop();
+  if (d) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; d.sec.classList.add('dropok'); }
+});
+document.addEventListener('drop', e => { if (!dragId) return; const d = dropCat(e); e.preventDefault(); clearDrop(); const id = dragId; dragId = null; if (d) moveTask(id, d.id); });
+document.addEventListener('dragend', () => { dragId = null; clearDrop(); });
+
 let dragN = 0;
 const hasFiles = e => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
 document.addEventListener('dragenter', e => { if (view !== 't' || !hasFiles(e)) return; e.preventDefault(); dragN++; document.body.classList.add('drop'); });
@@ -510,7 +534,7 @@ function menuHtml(kind, id) {
   if (kind === 'att') return `<button class="red" data-act="attdel" data-id="${esc(id)}">${I.trash}<span>Delete</span></button>`;
   if (kind === 'task') {
     const t = state.tasks.find(x => x.id === id); if (!t) return '';
-    return `<button data-act="ctxdone" data-id="${id}">${I.check}<span>${t.done ? 'Mark as incomplete' : 'Mark as complete'}</span></button><button class="red" data-act="ctxdel" data-id="${id}">${I.trash}<span>Delete</span></button>`;
+    return `<button data-act="ctxmove" data-id="${id}">${I.move}<span>Move to</span></button><button data-act="ctxdone" data-id="${id}">${I.check}<span>${t.done ? 'Mark as incomplete' : 'Mark as complete'}</span></button><button class="red" data-act="ctxdel" data-id="${id}">${I.trash}<span>Delete</span></button>`;
   }
   const c = cat(id); if (!c) return '';
   return `<button data-act="archive" data-id="${id}">${I.arch}<span>Archive</span></button>`
@@ -524,6 +548,10 @@ function openMenu(kind, id, x, y) {
   menu.innerHTML = html;
   document.body.appendChild(menu);
   const r = menu.getBoundingClientRect();
+  menu.dataset.x = x; menu.dataset.y = y; placeMenu();
+}
+function placeMenu() {
+  const r = menu.getBoundingClientRect(), x = +menu.dataset.x, y = +menu.dataset.y;
   menu.style.left = Math.max(8, Math.min(x, innerWidth - r.width - 8)) + 'px';
   menu.style.top = Math.max(8, Math.min(y, innerHeight - r.height - 8)) + 'px';
 }
@@ -554,6 +582,13 @@ document.addEventListener('click', e => {
   if (menu && !e.target.closest('.menu')) { closeMenu(); e.preventDefault(); return; }
   const b = e.target.closest('[data-act]'); if (!b) return;
   const id = b.dataset.id, act = b.dataset.act;
+  if (act === 'ctxmove' && menu) {
+    const t = state.tasks.find(x => x.id === id); if (!t) return;
+    const targets = state.cats.filter(c => !subsOf(c.id).length && c.id !== t.cat);
+    menu.innerHTML = targets.map(c => `<button data-act="ctxmoveto" data-id="${id}" data-to="${c.id}"><span>${c.parent ? esc(cat(c.parent).name) + ' / ' : ''}${esc(c.name)}</span></button>`).join('');
+    placeMenu(); return;
+  }
+  if (act === 'ctxmoveto') { closeMenu(); moveTask(id, b.dataset.to); return; }
   if (act === 'delcat' && menu) { menu.innerHTML = `<div class="sure"><span>Sure?</span><button class="ib sm red" data-act="delcatok" data-id="${id}" aria-label="Delete">${I.check}</button><button class="ib sm" data-act="ctxclose" aria-label="Cancel">${I.x}</button></div>`; return; }
   if (b.closest('.menu')) closeMenu();
   if (act === 'ctxclose') return;
