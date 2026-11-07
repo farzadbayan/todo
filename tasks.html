@@ -260,11 +260,6 @@ function catBlock(c, lvl) {
       <div class="add${pend[c.id] ? ' typing' : ''}">${I.plus}<input data-add="${c.id}" enterkeyhint="done" autocomplete="off" aria-label="Add task"><button class="dm${pend[c.id] ? ' on' : ''}" data-act="pick" data-for="${c.id}" aria-label="Date">${pend[c.id] ? fmtD(pend[c.id]) : I.cal}</button></div>
       ${subs.map(s => catBlock(s, lvl + 1)).join('')}
       ${adding && adding.parent === c.id ? `<div class="newcat sub"><input data-new="${c.id}" enterkeyhint="done" autocomplete="off"></div>` : ''}
-      <div class="tools">
-        <button class="ib sm" data-act="archive" data-id="${c.id}" aria-label="Archive">${I.arch}${done ? `<sup>${done}</sup>` : ''}</button>
-        ${lvl === 0 ? `<button class="ib sm" data-act="addsub" data-id="${c.id}" aria-label="Add sub-category">${I.sub}</button>` : ''}
-        ${empty ? `<button class="ib sm" data-act="delcat" data-id="${c.id}" aria-label="Delete">${I.trash}</button>` : ''}
-      </div>
     </div>` : ''}
   </section>`;
 }
