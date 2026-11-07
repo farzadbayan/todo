@@ -135,6 +135,7 @@ textarea{all:unset;display:block;width:100%;white-space:pre-wrap;overflow-wrap:a
 .attf{margin-top:8px}
 .att-file{all:unset;display:flex;align-items:center;gap:8px;width:100%;padding:6px 0;font-size:16px;color:var(--txt);cursor:pointer;overflow-wrap:anywhere;-webkit-touch-callout:none;user-select:none;-webkit-user-select:none}
 .att-file svg{width:18px;height:18px;flex:none;color:var(--mute)}
+.drop #tv{outline:1.5px dashed var(--mute);outline-offset:12px;border-radius:4px}
 .lb{position:fixed;inset:0;z-index:30;background:rgba(239,238,234,.97);display:grid;place-items:center;padding:20px;cursor:zoom-out}
 .lb img{max-width:100%;max-height:100%;object-fit:contain}
 .key{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--rule);padding:14px 0;margin-top:20px}
@@ -452,6 +453,21 @@ async function openAtt(path) {
 document.addEventListener('change', e => {
   if (e.target.id !== 'file') return;
   const id = vid; [...e.target.files].forEach(f => upload(id, f)); e.target.value = '';
+});
+
+let dragN = 0;
+const hasFiles = e => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+document.addEventListener('dragenter', e => { if (view !== 't' || !hasFiles(e)) return; e.preventDefault(); dragN++; document.body.classList.add('drop'); });
+document.addEventListener('dragover', e => { if (view === 't' && hasFiles(e)) e.preventDefault(); });
+document.addEventListener('dragleave', e => { if (view !== 't' || !hasFiles(e)) return; if (--dragN <= 0) { dragN = 0; document.body.classList.remove('drop'); } });
+document.addEventListener('drop', e => {
+  if (view !== 't' || !hasFiles(e)) return; e.preventDefault(); dragN = 0; document.body.classList.remove('drop');
+  const id = vid; [...e.dataTransfer.files].forEach(f => upload(id, f));
+});
+document.addEventListener('paste', e => {
+  if (view !== 't' || !e.clipboardData) return;
+  const fs = [...e.clipboardData.files]; if (!fs.length) return;
+  e.preventDefault(); const id = vid; fs.forEach(f => upload(id, f.name && f.name !== 'image.png' ? f : new File([f], 'pasted-' + Date.now() + '.png', { type: f.type })));
 });
 
 /* ---------- calendar ---------- */
