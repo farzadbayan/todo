@@ -61,6 +61,11 @@ sup{font-size:clamp(13px,3.6vw,16px);font-weight:400;letter-spacing:0;vertical-a
 .date svg{width:20px;height:20px}
 .date input{position:absolute;inset:0;opacity:0;width:100%;height:100%;border:0;padding:0;cursor:pointer}
 .date input::-webkit-calendar-picker-indicator{position:absolute;inset:0;width:100%;height:100%;cursor:pointer}
+.tasks button{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.menu{position:fixed;z-index:20;background:var(--bg);border:1px solid var(--soft);border-radius:4px;padding:4px;box-shadow:0 8px 28px rgba(0,0,0,.14)}
+.menu button{all:unset;display:flex;align-items:center;gap:8px;padding:8px 16px 8px 10px;font-size:16px;color:#b3261e;cursor:pointer;border-radius:3px}
+.menu button:hover{background:var(--chip)}
+.menu svg{width:18px;height:18px}
 .tasks button:hover{color:var(--ink)}
 .add{display:flex;align-items:center;gap:8px;padding:6px 0;color:var(--soft)}
 .add svg{width:18px;height:18px;flex:none}
@@ -305,7 +310,34 @@ function fit(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight +
 
 /* ---------- events ---------- */
 let armTimer;
+/* ---------- delete via right-click / long-press ---------- */
+let menu = null, lp, lpFired = false;
+function openMenu(id, x, y) {
+  closeMenu();
+  menu = document.createElement('div'); menu.className = 'menu';
+  menu.innerHTML = `<button data-act="ctxdel" data-id="${id}">${I.trash}<span>Delete</span></button>`;
+  document.body.appendChild(menu);
+  const r = menu.getBoundingClientRect();
+  menu.style.left = Math.max(8, Math.min(x, innerWidth - r.width - 8)) + 'px';
+  menu.style.top = Math.max(8, Math.min(y, innerHeight - r.height - 8)) + 'px';
+}
+function closeMenu() { if (menu) { menu.remove(); menu = null; } }
+document.addEventListener('contextmenu', e => {
+  const b = e.target.closest('[data-act="task"]'); if (!b) return;
+  e.preventDefault(); openMenu(b.dataset.id, e.clientX, e.clientY);
+});
+document.addEventListener('touchstart', e => {
+  lpFired = false; clearTimeout(lp);
+  const b = e.target.closest('[data-act="task"]'); if (!b) return;
+  const t = e.touches[0];
+  lp = setTimeout(() => { lpFired = true; openMenu(b.dataset.id, t.clientX, t.clientY); navigator.vibrate && navigator.vibrate(10); }, 500);
+}, { passive: true });
+['touchend', 'touchmove', 'touchcancel'].forEach(ev => document.addEventListener(ev, () => clearTimeout(lp), { passive: true }));
+addEventListener('scroll', closeMenu, { passive: true });
+
 document.addEventListener('click', e => {
+  if (lpFired) { lpFired = false; e.preventDefault(); return; }
+  if (menu && !e.target.closest('.menu')) { closeMenu(); e.preventDefault(); return; }
   const b = e.target.closest('[data-act]'); if (!b) return;
   const id = b.dataset.id, act = b.dataset.act;
   if (act === 'toggle') { open.has(id) ? open.delete(id) : open.add(id); ls('open', JSON.stringify([...open])); render(); }
@@ -327,6 +359,7 @@ document.addEventListener('click', e => {
     state.tasks = state.tasks.filter(x => x.id !== vid); save(300); back();
   }
   else if (act === 'savekey') saveKey();
+  else if (act === 'ctxdel') { closeMenu(); state.tasks = state.tasks.filter(x => x.id !== id); save(300); render(); }
   else if (act === 'nodate') { const t = state.tasks.find(x => x.id === vid); if (t) { t.due = null; save(300); render(); } }
 });
 
@@ -348,6 +381,7 @@ async function saveKey() {
 document.addEventListener('keydown', e => {
   const el = e.target;
   if (e.key === 'Escape') {
+    if (menu) { closeMenu(); return; }
     if (el.dataset && el.dataset.new !== undefined) { adding = null; render(); return; }
     if (view) { el.blur && el.blur(); back(); }
     return;
