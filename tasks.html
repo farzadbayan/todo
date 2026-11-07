@@ -47,8 +47,10 @@ sup{font-size:clamp(13px,3.6vw,16px);font-weight:400;letter-spacing:0;vertical-a
 .l1 .body{padding-bottom:10px}
 .tasks{list-style:none;margin:0;padding:0}
 .tasks button{all:unset;box-sizing:border-box;display:block;width:100%;padding:6px 0;font-size:20px;line-height:1.3;color:var(--txt);cursor:pointer;overflow-wrap:anywhere}
-.tasks li{display:flex;align-items:center;gap:12px}
-.tasks li>button{flex:1;min-width:0}
+.tasks button{display:flex;justify-content:space-between;align-items:baseline;gap:14px}
+.due{font-size:14px;color:var(--mute);white-space:nowrap;flex:none}
+.add .dm{display:none}
+.add.typing .dm{display:flex}
 .dm{position:relative;flex:none;display:flex;align-items:center;justify-content:flex-end;min-width:30px;min-height:32px;color:var(--soft);font-size:14px;white-space:nowrap;cursor:pointer}
 .dm.on{color:var(--mute)}
 .dm svg{width:16px;height:16px}
@@ -214,7 +216,7 @@ const subsOf = id => state.cats.filter(c => c.parent === id);
 const tasksOf = (id, done) => state.tasks.filter(t => t.cat === id && !!t.done === done);
 const openCount = id => tasksOf(id, false).length + subsOf(id).reduce((n, s) => n + openCount(s.id), 0);
 const fmtD = v => { if (!v) return ''; const d = new Date(v + 'T00:00'); return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', ...(d.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) }); };
-const taskLi = t => `<li><button data-act="task" data-id="${t.id}">${esc(t.title) || '·'}</button><label class="dm${t.due ? ' on' : ''}">${t.due ? fmtD(t.due) : I.cal}<input type="date" data-due="${t.id}" value="${esc(t.due || '')}" aria-label="Date"></label></li>`;
+const taskLi = t => `<li><button data-act="task" data-id="${t.id}"><span>${esc(t.title) || '·'}</span>${t.due ? `<span class="due">${fmtD(t.due)}</span>` : ''}</button></li>`;
 const sup = n => n ? `<sup>(${n})</sup>` : '';
 
 /* ---------- routing ---------- */
@@ -239,7 +241,7 @@ function catBlock(c, lvl) {
     <button class="row" data-act="toggle" data-id="${c.id}"><span class="name">${esc(c.name)}${sup(openCount(c.id))}</span><span class="tog">${isOpen ? I.minus : I.plus}</span></button>
     ${isOpen ? `<div class="body">
       <ul class="tasks">${todo.map(taskLi).join('')}</ul>
-      <label class="add">${I.plus}<input data-add="${c.id}" enterkeyhint="done" autocomplete="off" aria-label="Add task"></label>
+      <div class="add${pend[c.id] ? ' typing' : ''}">${I.plus}<input data-add="${c.id}" enterkeyhint="done" autocomplete="off" aria-label="Add task"><span class="dm${pend[c.id] ? ' on' : ''}">${pend[c.id] ? fmtD(pend[c.id]) : I.cal}<input type="date" data-pdue="${c.id}" value="${esc(pend[c.id] || '')}" aria-label="Date"></span></div>
       ${subs.map(s => catBlock(s, lvl + 1)).join('')}
       ${adding && adding.parent === c.id ? `<div class="newcat sub"><input data-new="${c.id}" enterkeyhint="done" autocomplete="off"></div>` : ''}
       <div class="tools">
@@ -293,12 +295,12 @@ function render() {
       <div class="foot"><button class="ib sm" data-act="addcat" aria-label="Add category">${I.plus}</button></div></div>`;
   }
 
-  if (keep) { const el = app.querySelector(keep); if (el) { el.value = val; el.focus(); } }
+  if (keep) { const el = app.querySelector(keep); if (el) { el.value = val; el.focus(); if (el.dataset.add !== undefined && val) el.parentNode.classList.add('typing'); } }
   rendering = false;
 }
 let rendering = false;
-let soon;
-function addTask(cat, title) { state.tasks.push({ id: uid(), cat, title, notes: '', done: false, created: Date.now() }); save(); }
+let soon; const pend = {};
+function addTask(cat, title) { state.tasks.push({ id: uid(), cat, title, notes: '', done: false, created: Date.now(), ...(pend[cat] ? { due: pend[cat] } : {}) }); delete pend[cat]; save(); }
 function fit(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
 
 /* ---------- events ---------- */
@@ -368,21 +370,35 @@ document.addEventListener('keydown', e => {
 
 document.addEventListener('focusout', e => {
   const el = e.target;
-  if (!rendering && el.dataset && el.dataset.add !== undefined && el.value.trim()) {
-    addTask(el.dataset.add, el.value.trim()); el.value = '';
-    clearTimeout(soon); soon = setTimeout(render, 250); return;
+  if (!rendering && el.dataset && el.dataset.add !== undefined) {
+    const cat = el.dataset.add;
+    if (e.relatedTarget && e.relatedTarget.dataset && e.relatedTarget.dataset.pdue === cat) return;
+    setTimeout(() => {
+      const a = document.activeElement;
+      if ((a && a.dataset && a.dataset.pdue === cat) || a === el || !el.value.trim()) return;
+      addTask(cat, el.value.trim()); el.value = ''; render();
+    }, 150);
+    return;
   }
   if (rendering || !el.dataset || el.dataset.new === undefined) return;
   setTimeout(() => { if (adding && !el.value.trim() && document.activeElement !== el) { adding = null; render(); } }, 120);
 });
 
 document.addEventListener('change', e => {
+  if (e.target.dataset && e.target.dataset.pdue) {
+    const cat = e.target.dataset.pdue, txt = app.querySelector(`[data-add="${cat}"]`);
+    const v = txt ? txt.value : '';
+    pend[cat] = e.target.value || null; rendering = true; e.target.blur(); rendering = false; render();
+    const n = app.querySelector(`[data-add="${cat}"]`); if (n) { n.value = v; n.parentNode.classList.add('typing'); n.focus(); }
+    return;
+  }
   const id = e.target.id === 'due' ? vid : e.target.dataset && e.target.dataset.due; if (!id) return;
   const t = state.tasks.find(x => x.id === id); if (!t) return;
   t.due = e.target.value || null; save(300); e.target.blur(); render();
 });
 
 document.addEventListener('input', e => {
+  if (e.target.dataset && e.target.dataset.add !== undefined) e.target.parentNode.classList.toggle('typing', !!e.target.value || !!pend[e.target.dataset.add]);
   const el = e.target, f = el.dataset && el.dataset.f; if (!f) return;
   const t = state.tasks.find(x => x.id === vid); if (!t) return;
   t[f] = f === 'title' ? el.value.replace(/\n/g, ' ') : el.value;
