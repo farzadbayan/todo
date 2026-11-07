@@ -430,6 +430,8 @@ function migrate() {
   state.tasks.forEach(t => {
     const m = String(t.notes || '').match(SLACK_RE);
     if (m) { if (!t.link) t.link = m[0].trim(); t.notes = t.notes.replace(SLACK_RE, '').trim(); ch = true; }
+    const dd = String(t.notes || '').replace(/(\S+) \((https?:\/\/([^\s)]+?)\/?)\)/g, (all, lbl, url, bare) => (lbl === bare || lbl === url || lbl + '/' === bare) ? url : all);
+    if (dd !== t.notes && t.notes != null) { t.notes = dd; ch = true; }
   });
   return ch;
 }
