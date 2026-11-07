@@ -128,6 +128,11 @@ textarea{all:unset;display:block;width:100%;white-space:pre-wrap;overflow-wrap:a
 .gd button{all:unset;display:block;width:100%;font-size:clamp(10px,1.1vw,13px);line-height:1.3;color:var(--txt);cursor:pointer;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow-wrap:anywhere}
 .gd button:hover{color:var(--ink)}
 .cvl{margin-top:14px;border-top:1px solid var(--rule);padding-top:8px}
+.links{display:flex;flex-wrap:wrap;gap:6px 16px;margin:-6px 0 8px}
+.links:empty{display:none}
+.links a{display:inline-flex;align-items:center;gap:6px;font-size:15px;color:var(--ink);text-decoration:none;border-bottom:1px solid var(--soft);padding:2px 0}
+.links a:hover{border-bottom-color:var(--ink)}
+.links svg{width:16px;height:16px;color:var(--mute)}
 .atts{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .att-img{all:unset;width:84px;height:84px;border-radius:4px;background:var(--chip);overflow:hidden;cursor:pointer;-webkit-touch-callout:none;user-select:none;-webkit-user-select:none}
 .att-img img{width:100%;height:100%;object-fit:cover;display:block}
@@ -173,6 +178,7 @@ const I = {
   clip:  '<svg viewBox="0 0 24 24"><path d="M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>',
   file:  '<svg viewBox="0 0 24 24"><path d="M14 3.5H6.5v17h11V7z"/><path d="M14 3.5V7h3.5"/></svg>',
   move:  '<svg viewBox="0 0 24 24"><path d="M4 12h15M14 7l5 5-5 5"/></svg>',
+  link:  '<svg viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>',
   key:   '<svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l2.5 2.5M14 9l2 2"/></svg>',
 };
 
@@ -336,6 +342,7 @@ function render() {
       <div class="path">${p ? esc(p.name) + ' / ' : ''}${esc(c ? c.name : '')}</div>
       <textarea class="title" data-f="title" rows="1">${esc(t.title)}</textarea>
       <textarea class="notes" data-f="notes" rows="4">${esc(t.notes)}</textarea>
+      <div class="links">${linksHtml(t.notes)}</div>
       <div class="daterow"><button class="date" data-act="pick" data-for="" aria-label="Date">${I.cal}<span>${fmtD(t.due)}</span></button>${t.due ? `<button class="ib sm" data-act="nodate" aria-label="Clear date">${I.x}</button>` : ''}<button class="ib sm" data-act="attach" aria-label="Attach">${I.clip}</button><input id="file" type="file" multiple hidden></div>
       ${attsHtml(t)}
       <button class="done ${t.done ? 'on' : ''}" data-act="done">${I.check}<span>${t.done ? 'Completed' : 'Mark as complete'}</span></button>
@@ -401,6 +408,13 @@ function fit(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight +
 
 /* ---------- events ---------- */
 let armTimer;
+/* ---------- links in notes ---------- */
+function linksHtml(txt) {
+  const urls = [...new Set(String(txt || '').match(/https?:\/\/[^\s<>"')]+/g) || [])];
+  return urls.map(u => { let h = u; try { const x = new URL(u); h = /slack\.com$/.test(x.hostname) ? 'Open in Slack' : x.hostname.replace(/^www\./, ''); } catch (e) {}
+    return `<a href="${esc(u)}" target="_blank" rel="noopener">${I.link}<span>${esc(h)}</span></a>`; }).join('');
+}
+
 /* ---------- attachments ---------- */
 const blobs = {}, uploading = {};
 const isImg = f => /^image\//.test(f.type || '');
@@ -706,6 +720,7 @@ document.addEventListener('input', e => {
   const t = state.tasks.find(x => x.id === vid); if (!t) return;
   t[f] = f === 'title' ? el.value.replace(/\n/g, ' ') : el.value;
   fit(el); save(1200);
+  if (f === 'notes') { const l = app.querySelector('.links'); if (l) l.innerHTML = linksHtml(el.value); }
 });
 
 /* ---------- start ---------- */
