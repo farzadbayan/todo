@@ -115,6 +115,18 @@ textarea{all:unset;display:block;width:100%;white-space:pre-wrap;overflow-wrap:a
 .cv .d.t span{font-weight:700}
 .cv .d.s span{background:var(--ink);color:var(--bg)}
 .cv .d.h::after{content:'';position:absolute;bottom:3px;width:4px;height:4px;border-radius:50%;background:var(--ink)}
+.wide .wrap{max-width:1180px}
+.gg{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));margin-top:4px}
+.gg>:nth-child(7n+8){border-left:1px solid var(--soft)}
+.gw{font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;padding:14px 8px 10px;border-right:1px solid transparent}
+.ge,.gd{border-right:1px solid var(--soft);border-bottom:1px solid var(--soft);min-height:clamp(84px,14vw,150px)}
+.gw:nth-child(-n+7){border-bottom:1px solid var(--soft)}
+.gd{padding:clamp(5px,1vw,12px);display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0}
+.gd b{font-size:clamp(18px,3.2vw,34px);font-weight:700;letter-spacing:-.02em;line-height:1;margin-bottom:clamp(4px,.8vw,10px)}
+.gd.p b{color:var(--soft)}
+.gd.t{background:#fff}
+.gd button{all:unset;display:block;width:100%;font-size:clamp(10px,1.1vw,13px);line-height:1.3;color:var(--txt);cursor:pointer;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+.gd button:hover{color:var(--ink)}
 .cvl{margin-top:14px;border-top:1px solid var(--rule);padding-top:8px}
 .key{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--rule);padding:14px 0;margin-top:20px}
 .key input{all:unset;flex:1;min-width:0;font-size:20px}
@@ -145,6 +157,7 @@ const I = {
   cal:   '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="1"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
   prev:  '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
   next:  '<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>',
+  grid:  '<svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="1"/><path d="M3.5 9.5h17M3.5 14.5h17M9.2 9.5v10M14.8 9.5v10"/></svg>',
   key:   '<svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l2.5 2.5M14 9l2 2"/></svg>',
 };
 
@@ -289,6 +302,7 @@ function render() {
   const keep = a && a.dataset && (a.dataset.add ? '[data-add="' + a.dataset.add + '"]' : a.dataset.new !== undefined ? '[data-new="' + a.dataset.new + '"]' : null);
   const val = keep ? a.value : '';
   rendering = true;
+  if (view !== 'c') document.body.classList.remove('wide');
 
   if (view === 't') {
     const t = state.tasks.find(x => x.id === vid);
@@ -322,8 +336,21 @@ function render() {
     for (let d = 1; d <= days; d++) { const v = iso(new Date(y, mo, d)); cells += `<button class="d${v === today ? ' t' : ''}${v === cv.sel ? ' s' : ''}${has.has(v) ? ' h' : ''}" data-act="cvday" data-d="${v}"><span>${d}</span></button>`; }
     const cname = t => { const c = cat(t.cat), p = c.parent ? cat(c.parent) : null; return (p ? p.name + ' / ' : '') + c.name; };
     const list = open_.filter(t => t.due === cv.sel);
-    hd.innerHTML = closeBtn + '<span class="sp"></span>';
-    app.innerHTML = `<div class="cv"><div class="hd"><button class="ib" data-act="cvmv" data-n="-1">${I.prev}</button><span>${m.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span><button class="ib" data-act="cvmv" data-n="1">${I.next}</button></div><div class="g">${cells}</div></div>
+    const grid = ls('cvmode') === 'grid';
+    document.body.classList.toggle('wide', grid);
+    hd.innerHTML = closeBtn + `<button class="ib" data-act="cvmode" aria-label="Switch view">${grid ? I.cal : I.grid}</button>`;
+    const monthHd = `<div class="hd"><button class="ib" data-act="cvmv" data-n="-1">${I.prev}</button><span>${m.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span><button class="ib" data-act="cvmv" data-n="1">${I.next}</button></div>`;
+    if (grid) {
+      const wd = [...Array(7)].map((_, i) => new Date(2024, 0, 1 + i).toLocaleDateString(undefined, { weekday: 'short' }));
+      let gc = wd.map(w => `<span class="gw">${esc(w)}</span>`).join('') + '<span class="ge"></span>'.repeat(first);
+      for (let d = 1; d <= days; d++) {
+        const v = iso(new Date(y, mo, d)), ts = open_.filter(t => t.due === v);
+        gc += `<div class="gd${v === today ? ' t' : ''}${v < today ? ' p' : ''}"><b>${String(d).padStart(2, '0')}</b>${ts.map(t => `<button data-act="task" data-id="${t.id}">${esc(t.title) || '·'}</button>`).join('')}</div>`;
+      }
+      app.innerHTML = `<div class="cv">${monthHd}<div class="gg">${gc}</div></div>`;
+      return void (rendering = false);
+    }
+    app.innerHTML = `<div class="cv">${monthHd}<div class="g">${cells}</div></div>
       <ul class="tasks cvl">${list.map(t => `<li><button data-act="task" data-id="${t.id}"><span>${esc(t.title) || '·'}</span><span class="due">${esc(cname(t))}</span></button></li>`).join('')}</ul>`;
   } else if (view === 'k') {
     hd.innerHTML = closeBtn + `<button class="ib" data-act="savekey" aria-label="Save">${I.check}</button>`;
@@ -460,6 +487,7 @@ document.addEventListener('click', e => {
   else if (act === 'savekey') saveKey();
   else if (act === 'calview') { cv.sel = iso(new Date()); cv.m = new Date(); cv.m.setDate(1); nav('#/c'); }
   else if (act === 'cvmv') { cv.m.setMonth(cv.m.getMonth() + +b.dataset.n); render(); }
+  else if (act === 'cvmode') { ls('cvmode', ls('cvmode') === 'grid' ? 'dots' : 'grid'); render(); }
   else if (act === 'cvday') { cv.sel = b.dataset.d; render(); }
   else if (act === 'pick') openCal(b.dataset.for, b);
   else if (act === 'ctxsub') { open.add(id); ls('open', JSON.stringify([...open])); adding = { parent: id }; render(); const el = app.querySelector(`[data-new="${id}"]`); el && el.focus(); }
