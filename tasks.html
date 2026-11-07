@@ -340,6 +340,7 @@ document.addEventListener('input', e => {
 });
 
 /* ---------- start ---------- */
+if (location.hash.startsWith('#key=')) { token = decodeURIComponent(location.hash.slice(5)).trim(); ls('token', token); status = 'ok'; history.replaceState(null, '', location.pathname); }
 route();
 if (dirty) schedule(300); else pull();
 document.addEventListener('visibilitychange', () => { if (!document.hidden) pull(); });
