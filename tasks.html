@@ -128,6 +128,15 @@ textarea{all:unset;display:block;width:100%;white-space:pre-wrap;overflow-wrap:a
 .gd button{all:unset;display:block;width:100%;font-size:clamp(10px,1.1vw,13px);line-height:1.3;color:var(--txt);cursor:pointer;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow-wrap:anywhere}
 .gd button:hover{color:var(--ink)}
 .cvl{margin-top:14px;border-top:1px solid var(--rule);padding-top:8px}
+.atts{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.att-img{all:unset;width:84px;height:84px;border-radius:4px;background:var(--chip);overflow:hidden;cursor:pointer;-webkit-touch-callout:none;user-select:none;-webkit-user-select:none}
+.att-img img{width:100%;height:100%;object-fit:cover;display:block}
+.att-img.up{animation:p 1s infinite alternate}
+.attf{margin-top:8px}
+.att-file{all:unset;display:flex;align-items:center;gap:8px;width:100%;padding:6px 0;font-size:16px;color:var(--txt);cursor:pointer;overflow-wrap:anywhere;-webkit-touch-callout:none;user-select:none;-webkit-user-select:none}
+.att-file svg{width:18px;height:18px;flex:none;color:var(--mute)}
+.lb{position:fixed;inset:0;z-index:30;background:rgba(239,238,234,.97);display:grid;place-items:center;padding:20px;cursor:zoom-out}
+.lb img{max-width:100%;max-height:100%;object-fit:contain}
 .key{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--rule);padding:14px 0;margin-top:20px}
 .key input{all:unset;flex:1;min-width:0;font-size:20px}
 .key.bad{border-bottom-color:#b3261e;animation:sh .3s}
@@ -158,6 +167,8 @@ const I = {
   prev:  '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
   next:  '<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>',
   grid:  '<svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="1"/><path d="M3.5 9.5h17M3.5 14.5h17M9.2 9.5v10M14.8 9.5v10"/></svg>',
+  clip:  '<svg viewBox="0 0 24 24"><path d="M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>',
+  file:  '<svg viewBox="0 0 24 24"><path d="M14 3.5H6.5v17h11V7z"/><path d="M14 3.5V7h3.5"/></svg>',
   key:   '<svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l2.5 2.5M14 9l2 2"/></svg>',
 };
 
@@ -313,10 +324,12 @@ function render() {
       <div class="path">${p ? esc(p.name) + ' / ' : ''}${esc(c ? c.name : '')}</div>
       <textarea class="title" data-f="title" rows="1">${esc(t.title)}</textarea>
       <textarea class="notes" data-f="notes" rows="4">${esc(t.notes)}</textarea>
-      <div class="daterow"><button class="date" data-act="pick" data-for="" aria-label="Date">${I.cal}<span>${fmtD(t.due)}</span></button>${t.due ? `<button class="ib sm" data-act="nodate" aria-label="Clear date">${I.x}</button>` : ''}</div>
+      <div class="daterow"><button class="date" data-act="pick" data-for="" aria-label="Date">${I.cal}<span>${fmtD(t.due)}</span></button>${t.due ? `<button class="ib sm" data-act="nodate" aria-label="Clear date">${I.x}</button>` : ''}<button class="ib sm" data-act="attach" aria-label="Attach">${I.clip}</button><input id="file" type="file" multiple hidden></div>
+      ${attsHtml(t)}
       <button class="done ${t.done ? 'on' : ''}" data-act="done">${I.check}<span>${t.done ? 'Completed' : 'Mark as complete'}</span></button>
     </div>`;
     app.querySelectorAll('textarea').forEach(fit);
+    hydrate();
   } else if (view === 'a') {
     const c = cat(vid);
     if (!c) { rendering = false; history.replaceState(null, '', '#/'); return route(); }
@@ -376,6 +389,71 @@ function fit(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight +
 
 /* ---------- events ---------- */
 let armTimer;
+/* ---------- attachments ---------- */
+const blobs = {}, uploading = {};
+const isImg = f => /^image\//.test(f.type || '');
+function attsHtml(t) {
+  const fs = t.files || [], up = uploading[t.id] || [];
+  const imgs = fs.filter(isImg), others = fs.filter(f => !isImg(f));
+  if (!fs.length && !up.length) return '';
+  return `<div class="atts">${imgs.map(f => `<button class="att att-img" data-act="att" data-path="${esc(f.path)}"><img data-path="${esc(f.path)}" alt=""></button>`).join('')}${up.map(() => '<span class="att att-img up"></span>').join('')}</div>`
+    + (others.length ? `<div class="attf">${others.map(f => `<button class="att att-file" data-act="att" data-path="${esc(f.path)}">${I.file}<span>${esc(f.name)}</span></button>`).join('')}</div>` : '');
+}
+async function getBlob(path) {
+  if (blobs[path]) return blobs[path];
+  const r = await fetch(API + 'contents/' + path.split('/').map(encodeURIComponent).join('/'), { cache: 'no-store', headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github.raw' } });
+  if (!r.ok) throw new Error(r.status);
+  return (blobs[path] = URL.createObjectURL(await r.blob()));
+}
+function hydrate() { app.querySelectorAll('img[data-path]').forEach(async im => { try { im.src = await getBlob(im.dataset.path); } catch (e) {} }); }
+const readB64 = blob => new Promise((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1]); fr.onerror = no; fr.readAsDataURL(blob); });
+async function shrink(file) {
+  if (!/^image\/(jpeg|png|webp|heic|heif)$/.test(file.type)) return file;
+  try {
+    const bmp = await createImageBitmap(file), k = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+    if (k === 1 && file.size < 1.5e6) return file;
+    const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+    cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+    const b = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.85));
+    return b ? new File([b], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }) : file;
+  } catch (e) { return file; }
+}
+async function upload(taskId, file) {
+  (uploading[taskId] = uploading[taskId] || []).push(1); if (vid === taskId) render();
+  try {
+    const f = await shrink(file);
+    if (f.size > 40e6) throw new Error('too big');
+    const safe = f.name.replace(/[^\w.\-]+/g, '_').slice(-80) || 'file';
+    const path = `files/${taskId}/${uid()}-${safe}`;
+    const r = await fetch(API + 'contents/' + path, { method: 'PUT', headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' }, body: JSON.stringify({ message: 'file', content: await readB64(f) }) });
+    if (!r.ok) throw new Error(r.status);
+    const j = await r.json(), t = state.tasks.find(x => x.id === taskId);
+    blobs[path] = URL.createObjectURL(f);
+    if (t) { (t.files = t.files || []).push({ name: f.name, path, sha: j.content.sha, type: f.type, size: f.size }); save(300); }
+  } catch (e) { setStatus('err'); }
+  uploading[taskId].pop(); if (vid === taskId) render();
+}
+function removeFile(t, path) {
+  const f = (t.files || []).find(x => x.path === path); if (!f) return;
+  t.files = t.files.filter(x => x !== f); save(300);
+  fetch(API + 'contents/' + path, { method: 'DELETE', headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' }, body: JSON.stringify({ message: 'rm file', sha: f.sha }) }).catch(() => {});
+}
+function dropTask(id) { const t = state.tasks.find(x => x.id === id); if (t) (t.files || []).slice().forEach(f => removeFile(t, f.path)); state.tasks = state.tasks.filter(x => x.id !== id); }
+async function openAtt(path) {
+  const t = state.tasks.find(x => x.id === vid), f = t && (t.files || []).find(x => x.path === path); if (!f) return;
+  if (isImg(f)) {
+    const lb = document.createElement('div'); lb.className = 'lb'; lb.innerHTML = '<img alt="">'; document.body.appendChild(lb);
+    lb.onclick = () => lb.remove();
+    try { lb.firstChild.src = await getBlob(path); } catch (e) { lb.remove(); }
+  } else {
+    try { const a = document.createElement('a'); a.href = await getBlob(path); a.download = f.name; document.body.appendChild(a); a.click(); a.remove(); } catch (e) { setStatus('err'); }
+  }
+}
+document.addEventListener('change', e => {
+  if (e.target.id !== 'file') return;
+  const id = vid; [...e.target.files].forEach(f => upload(id, f)); e.target.value = '';
+});
+
 /* ---------- calendar ---------- */
 let cal = null, picking = 0;
 const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -411,7 +489,9 @@ function pickDay(v) {
 
 /* ---------- delete via right-click / long-press ---------- */
 let menu = null, lp, lpFired = false;
+const kindOf = b => b.dataset.act === 'task' ? 'task' : b.dataset.act === 'att' ? 'att' : 'cat';
 function menuHtml(kind, id) {
+  if (kind === 'att') return `<button class="red" data-act="attdel" data-id="${esc(id)}">${I.trash}<span>Delete</span></button>`;
   if (kind === 'task') {
     const t = state.tasks.find(x => x.id === id); if (!t) return '';
     return `<button data-act="ctxdone" data-id="${id}">${I.check}<span>${t.done ? 'Mark as incomplete' : 'Mark as complete'}</span></button><button class="red" data-act="ctxdel" data-id="${id}">${I.trash}<span>Delete</span></button>`;
@@ -433,14 +513,14 @@ function openMenu(kind, id, x, y) {
 }
 function closeMenu() { if (menu) { menu.remove(); menu = null; } }
 document.addEventListener('contextmenu', e => {
-  const b = e.target.closest('[data-act="task"],[data-act="toggle"]'); if (!b) return;
-  e.preventDefault(); openMenu(b.dataset.act === 'task' ? 'task' : 'cat', b.dataset.id, e.clientX, e.clientY);
+  const b = e.target.closest('[data-act="task"],[data-act="toggle"],[data-act="att"]'); if (!b) return;
+  e.preventDefault(); openMenu(kindOf(b), b.dataset.id || b.dataset.path, e.clientX, e.clientY);
 });
 document.addEventListener('touchstart', e => {
   lpFired = false; clearTimeout(lp);
-  const b = e.target.closest('[data-act="task"],[data-act="toggle"]'); if (!b) return;
+  const b = e.target.closest('[data-act="task"],[data-act="toggle"],[data-act="att"]'); if (!b) return;
   const t = e.touches[0];
-  lp = setTimeout(() => { lpFired = true; openMenu(b.dataset.act === 'task' ? 'task' : 'cat', b.dataset.id, t.clientX, t.clientY); navigator.vibrate && navigator.vibrate(10); }, 500);
+  lp = setTimeout(() => { lpFired = true; openMenu(kindOf(b), b.dataset.id || b.dataset.path, t.clientX, t.clientY); navigator.vibrate && navigator.vibrate(10); }, 500);
 }, { passive: true });
 ['touchend', 'touchmove', 'touchcancel'].forEach(ev => document.addEventListener(ev, () => clearTimeout(lp), { passive: true }));
 addEventListener('scroll', closeMenu, { passive: true });
@@ -482,7 +562,7 @@ document.addEventListener('click', e => {
   }
   else if (act === 'del') {
     if (!b.classList.contains('armed')) { b.classList.add('armed'); clearTimeout(armTimer); armTimer = setTimeout(() => b.classList.remove('armed'), 2500); return; }
-    state.tasks = state.tasks.filter(x => x.id !== vid); save(300); back();
+    dropTask(vid); save(300); back();
   }
   else if (act === 'savekey') saveKey();
   else if (act === 'calview') { cv.sel = iso(new Date()); cv.m = new Date(); cv.m.setDate(1); nav('#/c'); }
@@ -492,7 +572,10 @@ document.addEventListener('click', e => {
   else if (act === 'pick') openCal(b.dataset.for, b);
   else if (act === 'ctxsub') { open.add(id); ls('open', JSON.stringify([...open])); adding = { parent: id }; render(); const el = app.querySelector(`[data-new="${id}"]`); el && el.focus(); }
   else if (act === 'ctxdone') { closeMenu(); const t = state.tasks.find(x => x.id === id); if (t) { t.done = !t.done; t.doneAt = t.done ? Date.now() : null; save(300); render(); } }
-  else if (act === 'ctxdel') { closeMenu(); state.tasks = state.tasks.filter(x => x.id !== id); save(300); render(); }
+  else if (act === 'ctxdel') { closeMenu(); dropTask(id); save(300); render(); }
+  else if (act === 'attach') document.getElementById('file').click();
+  else if (act === 'att') openAtt(b.dataset.path);
+  else if (act === 'attdel') { const t = state.tasks.find(x => x.id === vid); if (t) { removeFile(t, id); render(); } }
   else if (act === 'nodate') { const t = state.tasks.find(x => x.id === vid); if (t) { t.due = null; save(300); render(); } }
 });
 
@@ -520,6 +603,7 @@ document.addEventListener('keydown', e => {
   const el = e.target;
   if (e.key === 'Escape') {
     if (menu) { closeMenu(); return; }
+    const lb = document.querySelector('.lb'); if (lb) { lb.remove(); return; }
     if (cal) { closeCal(); return; }
     if (el.dataset && el.dataset.new !== undefined) { adding = null; render(); return; }
     if (view) { el.blur && el.blur(); back(); }
