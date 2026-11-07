@@ -1,0 +1,13 @@
+{
+ "v": 1,
+ "cats": [
+  {"id": "cm", "name": "Clarified Mind", "parent": null},
+  {"id": "dd", "name": "Dark Digital", "parent": null},
+  {"id": "peak", "name": "Peak", "parent": "dd"},
+  {"id": "gs", "name": "Genspark", "parent": "dd"},
+  {"id": "game", "name": "Game", "parent": null},
+  {"id": "lang", "name": "Language App", "parent": null},
+  {"id": "other", "name": "Other Tasks", "parent": null}
+ ],
+ "tasks": []
+}
