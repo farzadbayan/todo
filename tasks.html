@@ -277,7 +277,7 @@ async function pull() {
       if (oldShas.has(j.sha) || j.sha === sha) { busy = false; setStatus('ok'); return; } // stale or unchanged
       sha = j.sha; ls('sha', sha);
       const txt = dec(j.content);
-      if (!dirty && txt !== ser()) { state = JSON.parse(txt); ls('state', ser()); render(); }
+      if (!dirty && txt !== ser()) { state = JSON.parse(txt); ls('state', ser()); if (migrate()) save(300); render(); }
     }
   } catch (e) {}
   busy = false; setStatus(ok ? 'ok' : 'err');
@@ -342,7 +342,7 @@ function render() {
       <div class="path">${p ? esc(p.name) + ' / ' : ''}${esc(c ? c.name : '')}</div>
       <textarea class="title" data-f="title" rows="1">${esc(t.title)}</textarea>
       <textarea class="notes" data-f="notes" rows="4">${esc(t.notes)}</textarea>
-      <div class="links">${linksHtml(t.notes)}</div>
+      <div class="links">${linksHtml(t.notes, t.link)}</div>
       <div class="daterow"><button class="date" data-act="pick" data-for="" aria-label="Date">${I.cal}<span>${fmtD(t.due)}</span></button>${t.due ? `<button class="ib sm" data-act="nodate" aria-label="Clear date">${I.x}</button>` : ''}<button class="ib sm" data-act="attach" aria-label="Attach">${I.clip}</button><input id="file" type="file" multiple hidden></div>
       ${attsHtml(t)}
       <button class="done ${t.done ? 'on' : ''}" data-act="done">${I.check}<span>${t.done ? 'Completed' : 'Mark as complete'}</span></button>
@@ -409,8 +409,17 @@ function fit(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight +
 /* ---------- events ---------- */
 let armTimer;
 /* ---------- links in notes ---------- */
-function linksHtml(txt) {
-  const urls = [...new Set(String(txt || '').match(/https?:\/\/[^\s<>"')]+/g) || [])];
+const SLACK_RE = /\s*https?:\/\/[\w.-]*slack\.com\/archives\/[^\s<>"]+/g;
+function migrate() {
+  let ch = false;
+  state.tasks.forEach(t => {
+    const m = String(t.notes || '').match(SLACK_RE);
+    if (m) { if (!t.link) t.link = m[0].trim(); t.notes = t.notes.replace(SLACK_RE, '').trim(); ch = true; }
+  });
+  return ch;
+}
+function linksHtml(txt, extra) {
+  const urls = [...new Set([...(extra ? [extra] : []), ...(String(txt || '').match(/https?:\/\/[^\s<>"')]+/g) || [])])];
   return urls.map(u => { let h = u; try { const x = new URL(u); h = /slack\.com$/.test(x.hostname) ? 'Open in Slack' : x.hostname.replace(/^www\./, ''); } catch (e) {}
     return `<a href="${esc(u)}" target="_blank" rel="noopener">${I.link}<span>${esc(h)}</span></a>`; }).join('');
 }
@@ -720,10 +729,11 @@ document.addEventListener('input', e => {
   const t = state.tasks.find(x => x.id === vid); if (!t) return;
   t[f] = f === 'title' ? el.value.replace(/\n/g, ' ') : el.value;
   fit(el); save(1200);
-  if (f === 'notes') { const l = app.querySelector('.links'); if (l) l.innerHTML = linksHtml(el.value); }
+  if (f === 'notes') { const l = app.querySelector('.links'); if (l) l.innerHTML = linksHtml(el.value, t.link); }
 });
 
 /* ---------- start ---------- */
+if (migrate()) save(300);
 if (location.hash.startsWith('#key=')) { token = decodeURIComponent(location.hash.slice(5)).trim(); ls('token', token); status = 'ok'; history.replaceState(null, '', location.pathname); }
 if (!token) history.replaceState(null, '', '#/k');
 route();
