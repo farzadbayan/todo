@@ -38,6 +38,7 @@ svg{fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-l
 .row{all:unset;box-sizing:border-box;display:flex;width:100%;align-items:center;justify-content:space-between;gap:12px;cursor:pointer}
 .l0>.row{padding:16px 0 14px}
 .l0>.row .name{font-size:clamp(30px,8.6vw,40px);font-weight:700;letter-spacing:-.028em;line-height:1.05}
+.today>.row{cursor:default}
 .l1{border-top:0;margin-top:14px}
 .l1>.row{padding:12px 0 10px}
 .l1>.row .name{font-size:clamp(22px,6.2vw,27px);font-weight:700;letter-spacing:-.02em;line-height:1.1}
@@ -304,7 +305,10 @@ function render() {
     app.innerHTML = `<label class="key">${I.key}<input id="tok" type="password" value="" autocomplete="off" spellcheck="false" enterkeyhint="done"></label>`;
   } else {
     hd.innerHTML = `<span class="sp"></span><button class="ib" data-act="key" aria-label="Sync"><span class="dot ${status}"></span></button>`;
-    app.innerHTML = `<div class="list">${state.cats.filter(c => !c.parent).map(c => catBlock(c, 0)).join('')}
+    const today = iso(new Date()), due = state.tasks.filter(t => !t.done && t.due === today && cat(t.cat));
+    const cname = t => { const c = cat(t.cat), p = c.parent ? cat(c.parent) : null; return (p ? p.name + ' / ' : '') + c.name; };
+    const todayHtml = due.length ? `<section class="cat l0 today"><div class="row"><span class="name">Today${sup(due.length)}</span></div><div class="body"><ul class="tasks">${due.map(t => `<li><button data-act="task" data-id="${t.id}"><span>${esc(t.title) || '·'}</span><span class="due">${esc(cname(t))}</span></button></li>`).join('')}</ul></div></section>` : '';
+    app.innerHTML = `<div class="list">${todayHtml}${state.cats.filter(c => !c.parent).map(c => catBlock(c, 0)).join('')}
       ${adding && adding.parent === null ? `<div class="newcat"><input data-new="" enterkeyhint="done" autocomplete="off"></div>` : ''}
       <div class="foot"><button class="ib sm" data-act="addcat" aria-label="Add category">${I.plus}</button></div></div>`;
   }
