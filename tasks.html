@@ -74,6 +74,9 @@ sup{font-size:clamp(13px,3.6vw,16px);font-weight:400;letter-spacing:0;vertical-a
 .menu button{all:unset;display:flex;align-items:center;gap:8px;padding:8px 16px 8px 10px;font-size:16px;color:var(--ink);cursor:pointer;border-radius:3px}
 .menu button.red{color:#b3261e}
 .menu button:hover{background:var(--chip)}
+.menu .sure{display:flex;align-items:center;gap:2px;padding:2px 2px 2px 12px;font-size:16px}
+.menu .sure span{margin-right:8px}
+.menu .sure .ib{width:36px;height:36px;padding:0;display:grid;place-items:center}
 .menu svg{width:18px;height:18px}
 .tasks button:hover{color:var(--ink)}
 .add{display:flex;align-items:center;gap:8px;padding:6px 0;color:var(--soft)}
@@ -357,10 +360,9 @@ function menuHtml(kind, id) {
     return `<button data-act="ctxdone" data-id="${id}">${I.check}<span>${t.done ? 'Mark as incomplete' : 'Mark as complete'}</span></button><button class="red" data-act="ctxdel" data-id="${id}">${I.trash}<span>Delete</span></button>`;
   }
   const c = cat(id); if (!c) return '';
-  const empty = !subsOf(id).length && !state.tasks.some(t => t.cat === id);
   return `<button data-act="archive" data-id="${id}">${I.arch}<span>Archive</span></button>`
     + (!c.parent ? `<button data-act="ctxsub" data-id="${id}">${I.sub}<span>Add sub-category</span></button>` : '')
-    + (empty ? `<button class="red" data-act="delcat" data-id="${id}">${I.trash}<span>Delete</span></button>` : '');
+    + `<button class="red" data-act="delcat" data-id="${id}">${I.trash}<span>Delete</span></button>`;
 }
 function openMenu(kind, id, x, y) {
   closeMenu();
@@ -399,7 +401,14 @@ document.addEventListener('click', e => {
   if (menu && !e.target.closest('.menu')) { closeMenu(); e.preventDefault(); return; }
   const b = e.target.closest('[data-act]'); if (!b) return;
   const id = b.dataset.id, act = b.dataset.act;
+  if (act === 'delcat' && menu) { menu.innerHTML = `<div class="sure"><span>Sure?</span><button class="ib sm red" data-act="delcatok" data-id="${id}" aria-label="Delete">${I.check}</button><button class="ib sm" data-act="ctxclose" aria-label="Cancel">${I.x}</button></div>`; return; }
   if (b.closest('.menu')) closeMenu();
+  if (act === 'ctxclose') return;
+  if (act === 'delcatok') {
+    const ids = [id, ...subsOf(id).map(c => c.id)];
+    state.cats = state.cats.filter(c => !ids.includes(c.id)); state.tasks = state.tasks.filter(t => !ids.includes(t.cat));
+    ids.forEach(x => open.delete(x)); ls('open', JSON.stringify([...open])); save(300); render(); return;
+  }
   if (act === 'toggle') { open.has(id) ? open.delete(id) : open.add(id); ls('open', JSON.stringify([...open])); render(); }
   else if (act === 'task') nav('#/t/' + id);
   else if (act === 'archive') nav('#/a/' + id);
