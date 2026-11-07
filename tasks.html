@@ -70,6 +70,7 @@ textarea{all:unset;display:block;width:100%;white-space:pre-wrap;overflow-wrap:a
 .done.on{background:var(--ink);color:var(--bg)}
 .atitle{font-size:clamp(30px,8.6vw,40px);font-weight:700;letter-spacing:-.028em;line-height:1.05;padding:16px 0 14px;border-bottom:1px solid var(--rule);margin:0 0 10px;display:flex;align-items:center;gap:12px}
 .atitle svg{width:24px;height:24px;stroke-width:1.2;flex:none}
+.asub{font-size:clamp(22px,6.2vw,27px);font-weight:700;letter-spacing:-.02em;line-height:1.1;padding:12px 0 8px;margin-top:14px;border-top:1px solid var(--soft)}
 .key{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--rule);padding:14px 0;margin-top:20px}
 .key input{all:unset;flex:1;min-width:0;font-size:20px}
 .key.bad{border-bottom-color:#b3261e;animation:sh .3s}
@@ -213,7 +214,7 @@ const hd = document.getElementById('hd'), app = document.getElementById('app');
 const closeBtn = `<button class="ib box" data-act="back" aria-label="Close">${I.x}</button>`;
 
 function catBlock(c, lvl) {
-  const isOpen = open.has(c.id), subs = subsOf(c.id), todo = tasksOf(c.id, false), done = tasksOf(c.id, true).length;
+  const isOpen = open.has(c.id), subs = subsOf(c.id), todo = tasksOf(c.id, false), done = tasksOf(c.id, true).length + subs.reduce((n, sc) => n + tasksOf(sc.id, true).length, 0);
   const empty = !subs.length && !todo.length && !done;
   return `<section class="cat l${lvl}">
     <button class="row" data-act="toggle" data-id="${c.id}"><span class="name">${esc(c.name)}${sup(openCount(c.id))}</span><span class="tog">${isOpen ? I.minus : I.plus}</span></button>
@@ -254,10 +255,13 @@ function render() {
   } else if (view === 'a') {
     const c = cat(vid);
     if (!c) { rendering = false; history.replaceState(null, '', '#/'); return route(); }
-    const list = tasksOf(c.id, true).sort((x, y) => (y.doneAt || 0) - (x.doneAt || 0));
+    const sorted = id => tasksOf(id, true).sort((x, y) => (y.doneAt || 0) - (x.doneAt || 0));
+    const li = l => `<ul class="tasks">${l.map(t => `<li><button data-act="task" data-id="${t.id}">${esc(t.title) || '·'}</button></li>`).join('')}</ul>`;
+    const subs = subsOf(c.id).map(sc => [sc, sorted(sc.id)]).filter(([, l]) => l.length);
+    const own = sorted(c.id), total = own.length + subs.reduce((n, [, l]) => n + l.length, 0);
     hd.innerHTML = closeBtn + '<span class="sp"></span>';
-    app.innerHTML = `<div class="atitle">${I.arch}<span>${esc(c.name)}${sup(list.length)}</span></div>
-      <ul class="tasks">${list.map(t => `<li><button data-act="task" data-id="${t.id}">${esc(t.title) || '·'}</button></li>`).join('')}</ul>`;
+    app.innerHTML = `<div class="atitle">${I.arch}<span>${esc(c.name)}${sup(total)}</span></div>${li(own)}
+      ${subs.map(([sc, l]) => `<div class="asub">${esc(sc.name)}${sup(l.length)}</div>${li(l)}`).join('')}`;
   } else if (view === 'k') {
     hd.innerHTML = closeBtn + `<button class="ib" data-act="savekey" aria-label="Save">${I.check}</button>`;
     app.innerHTML = `<label class="key">${I.key}<input id="tok" type="password" value="" autocomplete="off" spellcheck="false" enterkeyhint="done"></label>`;
