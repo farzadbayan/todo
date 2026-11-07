@@ -34,6 +34,7 @@ svg{fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-l
 @keyframes p{to{opacity:.3}}
 .list{margin-top:40px}
 .cat{border-top:1px solid var(--rule)}
+.row{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .row{all:unset;box-sizing:border-box;display:flex;width:100%;align-items:center;justify-content:space-between;gap:12px;cursor:pointer}
 .l0>.row{padding:16px 0 14px}
 .l0>.row .name{font-size:clamp(30px,8.6vw,40px);font-weight:700;letter-spacing:-.028em;line-height:1.05}
@@ -355,12 +356,22 @@ function pickDay(v) {
 
 /* ---------- delete via right-click / long-press ---------- */
 let menu = null, lp, lpFired = false;
-function openMenu(id, x, y) {
+function menuHtml(kind, id) {
+  if (kind === 'task') {
+    const t = state.tasks.find(x => x.id === id); if (!t) return '';
+    return `<button data-act="ctxdone" data-id="${id}">${I.check}<span>${t.done ? 'Mark as incomplete' : 'Mark as complete'}</span></button><button class="red" data-act="ctxdel" data-id="${id}">${I.trash}<span>Delete</span></button>`;
+  }
+  const c = cat(id); if (!c) return '';
+  const empty = !subsOf(id).length && !state.tasks.some(t => t.cat === id);
+  return `<button data-act="archive" data-id="${id}">${I.arch}<span>Archive</span></button>`
+    + (!c.parent ? `<button data-act="ctxsub" data-id="${id}">${I.sub}<span>Add sub-category</span></button>` : '')
+    + (empty ? `<button class="red" data-act="delcat" data-id="${id}">${I.trash}<span>Delete</span></button>` : '');
+}
+function openMenu(kind, id, x, y) {
   closeMenu();
-  if (!state.tasks.some(x => x.id === id)) return;
+  const html = menuHtml(kind, id); if (!html) return;
   menu = document.createElement('div'); menu.className = 'menu';
-  const t = state.tasks.find(x => x.id === id); if (!t) return;
-  menu.innerHTML = `<button data-act="ctxdone" data-id="${id}">${I.check}<span>${t.done ? 'Mark as incomplete' : 'Mark as complete'}</span></button><button class="red" data-act="ctxdel" data-id="${id}">${I.trash}<span>Delete</span></button>`;
+  menu.innerHTML = html;
   document.body.appendChild(menu);
   const r = menu.getBoundingClientRect();
   menu.style.left = Math.max(8, Math.min(x, innerWidth - r.width - 8)) + 'px';
@@ -368,14 +379,14 @@ function openMenu(id, x, y) {
 }
 function closeMenu() { if (menu) { menu.remove(); menu = null; } }
 document.addEventListener('contextmenu', e => {
-  const b = e.target.closest('[data-act="task"]'); if (!b) return;
-  e.preventDefault(); openMenu(b.dataset.id, e.clientX, e.clientY);
+  const b = e.target.closest('[data-act="task"],[data-act="toggle"]'); if (!b) return;
+  e.preventDefault(); openMenu(b.dataset.act === 'task' ? 'task' : 'cat', b.dataset.id, e.clientX, e.clientY);
 });
 document.addEventListener('touchstart', e => {
   lpFired = false; clearTimeout(lp);
-  const b = e.target.closest('[data-act="task"]'); if (!b) return;
+  const b = e.target.closest('[data-act="task"],[data-act="toggle"]'); if (!b) return;
   const t = e.touches[0];
-  lp = setTimeout(() => { lpFired = true; openMenu(b.dataset.id, t.clientX, t.clientY); navigator.vibrate && navigator.vibrate(10); }, 500);
+  lp = setTimeout(() => { lpFired = true; openMenu(b.dataset.act === 'task' ? 'task' : 'cat', b.dataset.id, t.clientX, t.clientY); navigator.vibrate && navigator.vibrate(10); }, 500);
 }, { passive: true });
 ['touchend', 'touchmove', 'touchcancel'].forEach(ev => document.addEventListener(ev, () => clearTimeout(lp), { passive: true }));
 addEventListener('scroll', closeMenu, { passive: true });
@@ -393,6 +404,7 @@ document.addEventListener('click', e => {
   if (menu && !e.target.closest('.menu')) { closeMenu(); e.preventDefault(); return; }
   const b = e.target.closest('[data-act]'); if (!b) return;
   const id = b.dataset.id, act = b.dataset.act;
+  if (b.closest('.menu')) closeMenu();
   if (act === 'toggle') { open.has(id) ? open.delete(id) : open.add(id); ls('open', JSON.stringify([...open])); render(); }
   else if (act === 'task') nav('#/t/' + id);
   else if (act === 'archive') nav('#/a/' + id);
@@ -413,6 +425,7 @@ document.addEventListener('click', e => {
   }
   else if (act === 'savekey') saveKey();
   else if (act === 'pick') openCal(b.dataset.for, b);
+  else if (act === 'ctxsub') { open.add(id); ls('open', JSON.stringify([...open])); adding = { parent: id }; render(); const el = app.querySelector(`[data-new="${id}"]`); el && el.focus(); }
   else if (act === 'ctxdone') { closeMenu(); const t = state.tasks.find(x => x.id === id); if (t) { t.done = !t.done; t.doneAt = t.done ? Date.now() : null; save(300); render(); } }
   else if (act === 'ctxdel') { closeMenu(); state.tasks = state.tasks.filter(x => x.id !== id); save(300); render(); }
   else if (act === 'nodate') { const t = state.tasks.find(x => x.id === vid); if (t) { t.due = null; save(300); render(); } }
