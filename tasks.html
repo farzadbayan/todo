@@ -63,7 +63,8 @@ sup{font-size:clamp(13px,3.6vw,16px);font-weight:400;letter-spacing:0;vertical-a
 .date input::-webkit-calendar-picker-indicator{position:absolute;inset:0;width:100%;height:100%;cursor:pointer}
 .tasks button{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .menu{position:fixed;z-index:20;background:var(--bg);border:1px solid var(--soft);border-radius:4px;padding:4px;box-shadow:0 8px 28px rgba(0,0,0,.14)}
-.menu button{all:unset;display:flex;align-items:center;gap:8px;padding:8px 16px 8px 10px;font-size:16px;color:#b3261e;cursor:pointer;border-radius:3px}
+.menu button{all:unset;display:flex;align-items:center;gap:8px;padding:8px 16px 8px 10px;font-size:16px;color:var(--ink);cursor:pointer;border-radius:3px}
+.menu button.red{color:#b3261e}
 .menu button:hover{background:var(--chip)}
 .menu svg{width:18px;height:18px}
 .tasks button:hover{color:var(--ink)}
@@ -314,8 +315,10 @@ let armTimer;
 let menu = null, lp, lpFired = false;
 function openMenu(id, x, y) {
   closeMenu();
+  if (!state.tasks.some(x => x.id === id)) return;
   menu = document.createElement('div'); menu.className = 'menu';
-  menu.innerHTML = `<button data-act="ctxdel" data-id="${id}">${I.trash}<span>Delete</span></button>`;
+  const t = state.tasks.find(x => x.id === id); if (!t) return;
+  menu.innerHTML = `<button data-act="ctxdone" data-id="${id}">${I.check}<span>${t.done ? 'Mark as incomplete' : 'Mark as complete'}</span></button><button class="red" data-act="ctxdel" data-id="${id}">${I.trash}<span>Delete</span></button>`;
   document.body.appendChild(menu);
   const r = menu.getBoundingClientRect();
   menu.style.left = Math.max(8, Math.min(x, innerWidth - r.width - 8)) + 'px';
@@ -359,6 +362,7 @@ document.addEventListener('click', e => {
     state.tasks = state.tasks.filter(x => x.id !== vid); save(300); back();
   }
   else if (act === 'savekey') saveKey();
+  else if (act === 'ctxdone') { closeMenu(); const t = state.tasks.find(x => x.id === id); if (t) { t.done = !t.done; t.doneAt = t.done ? Date.now() : null; save(300); render(); } }
   else if (act === 'ctxdel') { closeMenu(); state.tasks = state.tasks.filter(x => x.id !== id); save(300); render(); }
   else if (act === 'nodate') { const t = state.tasks.find(x => x.id === vid); if (t) { t.due = null; save(300); render(); } }
 });
