@@ -105,6 +105,17 @@ textarea{all:unset;display:block;width:100%;white-space:pre-wrap;overflow-wrap:a
 .atitle{font-size:clamp(30px,8.6vw,40px);font-weight:700;letter-spacing:-.028em;line-height:1.05;padding:16px 0 14px;border-bottom:1px solid var(--rule);margin:0 0 10px;display:flex;align-items:center;gap:12px}
 .atitle svg{width:24px;height:24px;stroke-width:1.2;flex:none}
 .asub{font-size:clamp(22px,6.2vw,27px);font-weight:700;letter-spacing:-.02em;line-height:1.1;padding:12px 0 8px;margin-top:14px}
+.cv{margin-top:24px}
+.cv .hd{display:flex;align-items:center;justify-content:space-between;font-size:20px;font-weight:700;letter-spacing:-.01em;padding-bottom:10px;border-bottom:1px solid var(--rule);margin-bottom:8px}
+.cv .g{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
+.cv .w{font-size:12px;color:var(--mute);padding:6px 0}
+.cv .d{all:unset;height:54px;display:grid;place-items:center;cursor:pointer;position:relative;font-size:17px}
+.cv .d span{width:36px;height:36px;border-radius:50%;display:grid;place-items:center}
+.cv .d:hover span{background:var(--chip)}
+.cv .d.t span{font-weight:700}
+.cv .d.s span{background:var(--ink);color:var(--bg)}
+.cv .d.h::after{content:'';position:absolute;bottom:3px;width:4px;height:4px;border-radius:50%;background:var(--ink)}
+.cvl{margin-top:14px;border-top:1px solid var(--rule);padding-top:8px}
 .key{display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--rule);padding:14px 0;margin-top:20px}
 .key input{all:unset;flex:1;min-width:0;font-size:20px}
 .key.bad{border-bottom-color:#b3261e;animation:sh .3s}
@@ -302,11 +313,23 @@ function render() {
     hd.innerHTML = closeBtn + '<span class="sp"></span>';
     app.innerHTML = `<div class="atitle">${I.arch}<span>${esc(c.name)}${sup(total)}</span></div>${li(own)}
       ${subs.map(([sc, l]) => `<div class="asub">${esc(sc.name)}${sup(l.length)}</div>${li(l)}`).join('')}`;
+  } else if (view === 'c') {
+    const m = cv.m, y = m.getFullYear(), mo = m.getMonth(), today = iso(new Date());
+    const open_ = state.tasks.filter(t => !t.done && t.due && cat(t.cat));
+    const has = new Set(open_.map(t => t.due));
+    const first = (new Date(y, mo, 1).getDay() + 6) % 7, days = new Date(y, mo + 1, 0).getDate();
+    let cells = ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(w => `<span class="w">${w}</span>`).join('') + '<span></span>'.repeat(first);
+    for (let d = 1; d <= days; d++) { const v = iso(new Date(y, mo, d)); cells += `<button class="d${v === today ? ' t' : ''}${v === cv.sel ? ' s' : ''}${has.has(v) ? ' h' : ''}" data-act="cvday" data-d="${v}"><span>${d}</span></button>`; }
+    const cname = t => { const c = cat(t.cat), p = c.parent ? cat(c.parent) : null; return (p ? p.name + ' / ' : '') + c.name; };
+    const list = open_.filter(t => t.due === cv.sel);
+    hd.innerHTML = closeBtn + '<span class="sp"></span>';
+    app.innerHTML = `<div class="cv"><div class="hd"><button class="ib" data-act="cvmv" data-n="-1">${I.prev}</button><span>${m.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span><button class="ib" data-act="cvmv" data-n="1">${I.next}</button></div><div class="g">${cells}</div></div>
+      <ul class="tasks cvl">${list.map(t => `<li><button data-act="task" data-id="${t.id}"><span>${esc(t.title) || '·'}</span><span class="due">${esc(cname(t))}</span></button></li>`).join('')}</ul>`;
   } else if (view === 'k') {
     hd.innerHTML = closeBtn + `<button class="ib" data-act="savekey" aria-label="Save">${I.check}</button>`;
     app.innerHTML = `<label class="key">${I.key}<input id="tok" type="password" value="" autocomplete="off" spellcheck="false" enterkeyhint="done"></label>`;
   } else {
-    hd.innerHTML = `<span class="sp"></span><button class="ib" data-act="key" aria-label="Sync"><span class="dot ${status}"></span></button>`;
+    hd.innerHTML = `<button class="ib" data-act="calview" aria-label="Calendar">${I.cal}</button><button class="ib" data-act="key" aria-label="Sync"><span class="dot ${status}"></span></button>`;
     const today = iso(new Date()), due = state.tasks.filter(t => !t.done && t.due === today && cat(t.cat));
     const cname = t => { const c = cat(t.cat), p = c.parent ? cat(c.parent) : null; return (p ? p.name + ' / ' : '') + c.name; };
     const todayHtml = due.length ? `<section class="cat l0 today"><div class="row"><span class="name">Today${sup(due.length)}</span></div><div class="body"><ul class="tasks">${due.map(t => `<li><button data-act="task" data-id="${t.id}"><span>${esc(t.title) || '·'}</span><span class="due">${esc(cname(t))}</span></button></li>`).join('')}</ul></div></section>` : '';
@@ -319,6 +342,7 @@ function render() {
   rendering = false;
 }
 let rendering = false;
+const cv = { m: (() => { const d = new Date(); d.setDate(1); return d; })(), sel: null };
 let soon; const pend = {};
 function addTask(cat, title) { state.tasks.push({ id: uid(), cat, title, notes: '', done: false, created: Date.now(), ...(pend[cat] ? { due: pend[cat] } : {}) }); delete pend[cat]; save(); }
 function fit(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
@@ -434,6 +458,9 @@ document.addEventListener('click', e => {
     state.tasks = state.tasks.filter(x => x.id !== vid); save(300); back();
   }
   else if (act === 'savekey') saveKey();
+  else if (act === 'calview') { cv.sel = iso(new Date()); cv.m = new Date(); cv.m.setDate(1); nav('#/c'); }
+  else if (act === 'cvmv') { cv.m.setMonth(cv.m.getMonth() + +b.dataset.n); render(); }
+  else if (act === 'cvday') { cv.sel = b.dataset.d; render(); }
   else if (act === 'pick') openCal(b.dataset.for, b);
   else if (act === 'ctxsub') { open.add(id); ls('open', JSON.stringify([...open])); adding = { parent: id }; render(); const el = app.querySelector(`[data-new="${id}"]`); el && el.focus(); }
   else if (act === 'ctxdone') { closeMenu(); const t = state.tasks.find(x => x.id === id); if (t) { t.done = !t.done; t.doneAt = t.done ? Date.now() : null; save(300); render(); } }
