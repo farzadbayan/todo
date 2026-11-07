@@ -50,7 +50,7 @@ sup{font-size:clamp(13px,3.6vw,16px);font-weight:400;letter-spacing:0;vertical-a
 .tasks button{display:flex;justify-content:space-between;align-items:baseline;gap:14px}
 .due{font-size:14px;color:var(--mute);white-space:nowrap;flex:none}
 .add .dm{display:none}
-.add.typing .dm{display:flex}
+.add.typing .dm{display:flex;color:var(--mute)}
 .dm{position:relative;flex:none;display:flex;align-items:center;justify-content:flex-end;min-width:30px;min-height:32px;color:var(--soft);font-size:14px;white-space:nowrap;cursor:pointer}
 .dm.on{color:var(--mute)}
 .dm svg{width:16px;height:16px}
@@ -64,7 +64,7 @@ sup{font-size:clamp(13px,3.6vw,16px);font-weight:400;letter-spacing:0;vertical-a
 .tasks button:hover{color:var(--ink)}
 .add{display:flex;align-items:center;gap:8px;padding:6px 0;color:var(--soft)}
 .add svg{width:18px;height:18px;flex:none}
-.add input,.newcat input{all:unset;flex:1;min-width:0;font-size:20px;line-height:1.3;color:var(--ink)}
+.add input[data-add],.newcat input{all:unset;flex:1;min-width:0;font-size:20px;line-height:1.3;color:var(--ink)}
 .add:focus-within{color:var(--mute)}
 .tools{display:flex;gap:2px;margin:10px 0 0 -9px}
 .tools sup{font-size:11px;margin-left:1px;top:-2px}
