@@ -82,7 +82,7 @@ textarea{all:unset;display:block;width:100%;white-space:pre-wrap;overflow-wrap:a
 </div>
 <script>
 /* ---------- config ---------- */
-const CFG = { owner: 'farzadbayan', repo: 'todo', branch: 'data', path: 'tasks.json' };
+const CFG = { owner: 'farzadbayan', repo: 'todo-data', branch: null, path: 'tasks.json' };
 
 /* ---------- icons ---------- */
 const I = {
@@ -128,7 +128,7 @@ const enc = s => { const b = new TextEncoder().encode(s); let o = ''; for (let i
 const dec = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\s/g, '')), c => c.charCodeAt(0)));
 const API = `https://api.github.com/repos/${CFG.owner}/${CFG.repo}/`;
 const gh = (method, body, p = 'contents/' + CFG.path) =>
-  fetch(API + p + (method === 'GET' && p.startsWith('contents') ? '?ref=' + CFG.branch : ''), {
+  fetch(API + p + (method === 'GET' && p.startsWith('contents') && CFG.branch ? '?ref=' + CFG.branch : ''), {
     method, cache: 'no-store',
     headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' },
     body: body ? JSON.stringify(body) : undefined,
@@ -154,14 +154,14 @@ async function push(retry = 2) {
   let ok = false;
   try {
     const snap = ser();
-    const r = await gh('PUT', { message: 'tasks', content: enc(snap), branch: CFG.branch, ...(sha ? { sha } : {}) });
+    const r = await gh('PUT', { message: 'tasks', content: enc(snap), ...(CFG.branch ? { branch: CFG.branch } : {}), ...(sha ? { sha } : {}) });
     if (r.ok) {
       sha = (await r.json()).content.sha; ls('sha', sha); ok = true;
       if (ser() === snap) { dirty = false; ls('dirty', '0'); }
     } else if (retry && (r.status === 409 || r.status === 422 || r.status === 404)) {
       const g = await gh('GET');
       if (g.ok) sha = (await g.json()).sha;
-      else if (g.status === 404) { sha = null; await ensureBranch(); }
+      else if (g.status === 404) { sha = null; if (CFG.branch) await ensureBranch(); }
       busy = false; return push(retry - 1);
     }
   } catch (e) {}
