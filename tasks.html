@@ -54,13 +54,20 @@ sup{font-size:clamp(13px,3.6vw,16px);font-weight:400;letter-spacing:0;vertical-a
 .dm{position:relative;flex:none;display:flex;align-items:center;justify-content:flex-end;min-width:30px;min-height:32px;color:var(--soft);font-size:14px;white-space:nowrap;cursor:pointer}
 .dm.on{color:var(--mute)}
 .dm svg{width:16px;height:16px}
-.dm input{position:absolute;inset:0;opacity:0;width:100%;height:100%;border:0;padding:0;cursor:pointer}
-.dm input::-webkit-calendar-picker-indicator{position:absolute;inset:0;width:100%;height:100%;cursor:pointer}
 .daterow{display:flex;align-items:center;gap:4px;margin-top:6px}
 .date{position:relative;display:inline-flex;align-items:center;gap:8px;min-height:40px;color:var(--mute);font-size:17px;cursor:pointer}
 .date svg{width:20px;height:20px}
-.date input{position:absolute;inset:0;opacity:0;width:100%;height:100%;border:0;padding:0;cursor:pointer}
-.date input::-webkit-calendar-picker-indicator{position:absolute;inset:0;width:100%;height:100%;cursor:pointer}
+.dm,.date{border:0;background:none;padding:0;font:inherit}
+.cal{position:fixed;z-index:20;background:var(--bg);border:1px solid var(--soft);border-radius:6px;padding:10px;box-shadow:0 8px 28px rgba(0,0,0,.14);width:272px;-webkit-user-select:none;user-select:none}
+.cal .hd{display:flex;align-items:center;justify-content:space-between;font-weight:500;font-size:16px;margin-bottom:6px}
+.cal .hd .ib{width:34px;height:34px}
+.cal .hd svg{width:18px;height:18px}
+.cal .g{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
+.cal .w{font-size:12px;color:var(--mute);padding:4px 0}
+.cal .d{all:unset;height:34px;border-radius:50%;font-size:15px;cursor:pointer;display:grid;place-items:center}
+.cal .d:hover{background:var(--chip)}
+.cal .d.t{font-weight:700}
+.cal .d.s{background:var(--ink);color:var(--bg)}
 .tasks button{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .menu{position:fixed;z-index:20;background:var(--bg);border:1px solid var(--soft);border-radius:4px;padding:4px;box-shadow:0 8px 28px rgba(0,0,0,.14)}
 .menu button{all:unset;display:flex;align-items:center;gap:8px;padding:8px 16px 8px 10px;font-size:16px;color:var(--ink);cursor:pointer;border-radius:3px}
@@ -118,6 +125,8 @@ const I = {
   trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg>',
   check: '<svg viewBox="0 0 24 24"><path d="M5.5 12.5l4.2 4.2L18.5 8"/></svg>',
   cal:   '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="1"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
+  prev:  '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
+  next:  '<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>',
   key:   '<svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l2.5 2.5M14 9l2 2"/></svg>',
 };
 
@@ -247,7 +256,7 @@ function catBlock(c, lvl) {
     <button class="row" data-act="toggle" data-id="${c.id}"><span class="name">${esc(c.name)}${sup(openCount(c.id))}</span><span class="tog">${isOpen ? I.minus : I.plus}</span></button>
     ${isOpen ? `<div class="body">
       <ul class="tasks">${todo.map(taskLi).join('')}</ul>
-      <div class="add${pend[c.id] ? ' typing' : ''}">${I.plus}<input data-add="${c.id}" enterkeyhint="done" autocomplete="off" aria-label="Add task"><span class="dm${pend[c.id] ? ' on' : ''}">${pend[c.id] ? fmtD(pend[c.id]) : I.cal}<input type="date" data-pdue="${c.id}" value="${esc(pend[c.id] || '')}" aria-label="Date"></span></div>
+      <div class="add${pend[c.id] ? ' typing' : ''}">${I.plus}<input data-add="${c.id}" enterkeyhint="done" autocomplete="off" aria-label="Add task"><button class="dm${pend[c.id] ? ' on' : ''}" data-act="pick" data-for="${c.id}" aria-label="Date">${pend[c.id] ? fmtD(pend[c.id]) : I.cal}</button></div>
       ${subs.map(s => catBlock(s, lvl + 1)).join('')}
       ${adding && adding.parent === c.id ? `<div class="newcat sub"><input data-new="${c.id}" enterkeyhint="done" autocomplete="off"></div>` : ''}
       <div class="tools">
@@ -277,7 +286,7 @@ function render() {
       <div class="path">${p ? esc(p.name) + ' / ' : ''}${esc(c ? c.name : '')}</div>
       <textarea class="title" data-f="title" rows="1">${esc(t.title)}</textarea>
       <textarea class="notes" data-f="notes" rows="4">${esc(t.notes)}</textarea>
-      <div class="daterow"><label class="date">${I.cal}<span>${fmtD(t.due)}</span><input id="due" type="date" value="${esc(t.due || '')}" aria-label="Date"></label>${t.due ? `<button class="ib sm" data-act="nodate" aria-label="Clear date">${I.x}</button>` : ''}</div>
+      <div class="daterow"><button class="date" data-act="pick" data-for="" aria-label="Date">${I.cal}<span>${fmtD(t.due)}</span></button>${t.due ? `<button class="ib sm" data-act="nodate" aria-label="Clear date">${I.x}</button>` : ''}</div>
       <button class="done ${t.done ? 'on' : ''}" data-act="done">${I.check}<span>${t.done ? 'Completed' : 'Mark as complete'}</span></button>
     </div>`;
     app.querySelectorAll('textarea').forEach(fit);
@@ -311,6 +320,39 @@ function fit(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight +
 
 /* ---------- events ---------- */
 let armTimer;
+/* ---------- calendar ---------- */
+let cal = null, picking = 0;
+const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+document.addEventListener('pointerdown', e => { if (e.target.closest('[data-act="pick"]') || e.target.closest('.cal')) picking = Date.now() + 1500; }, true);
+function openCal(forCat, anchor) {
+  const cur = forCat ? pend[forCat] : (state.tasks.find(x => x.id === vid) || {}).due;
+  const txt = forCat ? app.querySelector(`[data-add="${forCat}"]`) : null;
+  const r = anchor.getBoundingClientRect();
+  cal = { forCat, sel: cur || null, text: txt ? txt.value : '', m: cur ? new Date(cur + 'T00:00') : new Date(), x: r.right, y: r.bottom };
+  cal.m.setDate(1); drawCal();
+}
+function drawCal() {
+  let el = document.querySelector('.cal'); if (!el) { el = document.createElement('div'); el.className = 'cal'; document.body.appendChild(el); }
+  const m = cal.m, y = m.getFullYear(), mo = m.getMonth(), today = iso(new Date());
+  const first = (new Date(y, mo, 1).getDay() + 6) % 7, days = new Date(y, mo + 1, 0).getDate();
+  let cells = ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(w => `<span class="w">${w}</span>`).join('') + '<span></span>'.repeat(first);
+  for (let d = 1; d <= days; d++) { const v = iso(new Date(y, mo, d)); cells += `<button class="d${v === today ? ' t' : ''}${v === cal.sel ? ' s' : ''}" data-act="calday" data-d="${v}">${d}</button>`; }
+  el.innerHTML = `<div class="hd"><button class="ib" data-act="calmv" data-n="-1">${I.prev}</button><span>${m.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span><button class="ib" data-act="calmv" data-n="1">${I.next}</button></div><div class="g">${cells}</div>`;
+  const r = el.getBoundingClientRect();
+  el.style.left = Math.max(8, Math.min(cal.x - r.width, innerWidth - r.width - 8)) + 'px';
+  el.style.top = (cal.y + r.height + 8 > innerHeight ? Math.max(8, cal.y - r.height - 48) : cal.y + 6) + 'px';
+}
+function closeCal() { const el = document.querySelector('.cal'); if (el) el.remove(); cal = null; picking = 0; }
+function pickDay(v) {
+  const c = cal; closeCal();
+  if (c.forCat) {
+    pend[c.forCat] = v; render();
+    const n = app.querySelector(`[data-add="${c.forCat}"]`); if (n) { n.value = c.text; n.parentNode.classList.add('typing'); n.focus(); }
+  } else {
+    const t = state.tasks.find(x => x.id === vid); if (t) { t.due = v; save(300); render(); }
+  }
+}
+
 /* ---------- delete via right-click / long-press ---------- */
 let menu = null, lp, lpFired = false;
 function openMenu(id, x, y) {
@@ -337,9 +379,17 @@ document.addEventListener('touchstart', e => {
 }, { passive: true });
 ['touchend', 'touchmove', 'touchcancel'].forEach(ev => document.addEventListener(ev, () => clearTimeout(lp), { passive: true }));
 addEventListener('scroll', closeMenu, { passive: true });
+addEventListener('resize', closeCal);
 
 document.addEventListener('click', e => {
   if (lpFired) { lpFired = false; e.preventDefault(); return; }
+  if (cal && !e.target.closest('.cal')) {
+    const pk = e.target.closest('[data-act="pick"]'); const c = cal; closeCal();
+    if (c.forCat) { const n = app.querySelector(`[data-add="${c.forCat}"]`); if (n) { n.value = c.text; n.focus(); } }
+    if (pk) return;
+  }
+  const cb = e.target.closest('.cal [data-act]');
+  if (cb) { if (cb.dataset.act === 'calday') pickDay(cb.dataset.d); else { cal.m.setMonth(cal.m.getMonth() + +cb.dataset.n); drawCal(); } return; }
   if (menu && !e.target.closest('.menu')) { closeMenu(); e.preventDefault(); return; }
   const b = e.target.closest('[data-act]'); if (!b) return;
   const id = b.dataset.id, act = b.dataset.act;
@@ -362,6 +412,7 @@ document.addEventListener('click', e => {
     state.tasks = state.tasks.filter(x => x.id !== vid); save(300); back();
   }
   else if (act === 'savekey') saveKey();
+  else if (act === 'pick') openCal(b.dataset.for, b);
   else if (act === 'ctxdone') { closeMenu(); const t = state.tasks.find(x => x.id === id); if (t) { t.done = !t.done; t.doneAt = t.done ? Date.now() : null; save(300); render(); } }
   else if (act === 'ctxdel') { closeMenu(); state.tasks = state.tasks.filter(x => x.id !== id); save(300); render(); }
   else if (act === 'nodate') { const t = state.tasks.find(x => x.id === vid); if (t) { t.due = null; save(300); render(); } }
@@ -386,6 +437,7 @@ document.addEventListener('keydown', e => {
   const el = e.target;
   if (e.key === 'Escape') {
     if (menu) { closeMenu(); return; }
+    if (cal) { closeCal(); return; }
     if (el.dataset && el.dataset.new !== undefined) { adding = null; render(); return; }
     if (view) { el.blur && el.blur(); back(); }
     return;
@@ -410,29 +462,16 @@ document.addEventListener('focusout', e => {
   const el = e.target;
   if (!rendering && el.dataset && el.dataset.add !== undefined) {
     const cat = el.dataset.add;
-    if (e.relatedTarget && e.relatedTarget.dataset && e.relatedTarget.dataset.pdue === cat) return;
+    if (Date.now() < picking || cal) return;
     setTimeout(() => {
-      const a = document.activeElement;
-      if ((a && a.dataset && a.dataset.pdue === cat) || a === el || !el.value.trim()) return;
+      if (cal) return;
+      if (document.activeElement === el || !el.value.trim()) return;
       addTask(cat, el.value.trim()); el.value = ''; render();
     }, 150);
     return;
   }
   if (rendering || !el.dataset || el.dataset.new === undefined) return;
   setTimeout(() => { if (adding && !el.value.trim() && document.activeElement !== el) { adding = null; render(); } }, 120);
-});
-
-document.addEventListener('change', e => {
-  if (e.target.dataset && e.target.dataset.pdue) {
-    const cat = e.target.dataset.pdue, txt = app.querySelector(`[data-add="${cat}"]`);
-    const v = txt ? txt.value : '';
-    pend[cat] = e.target.value || null; rendering = true; e.target.blur(); rendering = false; render();
-    const n = app.querySelector(`[data-add="${cat}"]`); if (n) { n.value = v; n.parentNode.classList.add('typing'); n.focus(); }
-    return;
-  }
-  const id = e.target.id === 'due' ? vid : e.target.dataset && e.target.dataset.due; if (!id) return;
-  const t = state.tasks.find(x => x.id === id); if (!t) return;
-  t.due = e.target.value || null; save(300); e.target.blur(); render();
 });
 
 document.addEventListener('input', e => {
