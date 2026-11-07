@@ -474,10 +474,15 @@ async function unlock(pw) {
   const k = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: u(LOCK.s), iterations: LOCK.i, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
   return new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: u(LOCK.v) }, k, u(LOCK.c)));
 }
-async function saveKey() {
-  const el = document.getElementById('tok'), pw = el.value.trim(); if (!pw) return;
-  el.disabled = true;
-  try { token = await unlock(pw); } catch (e) { el.disabled = false; el.value = ''; el.parentNode.classList.add('bad'); setTimeout(() => el.parentNode.classList.remove('bad'), 600); el.focus(); return; }
+let autoT;
+async function saveKey(silent) {
+  const el = document.getElementById('tok'); if (!el) return; const pw = el.value.trim(); if (!pw) return;
+  if (!silent) el.disabled = true;
+  try { token = await unlock(pw); } catch (e) {
+    if (silent) return;
+    el.disabled = false; el.value = ''; el.parentNode.classList.add('bad'); setTimeout(() => el.parentNode.classList.remove('bad'), 600); el.focus(); return;
+  }
+  if (el.value.trim() !== pw) return;
   ls('token', token); setStatus('ok');
   if (history.state && history.state.app) history.back(); else { history.replaceState(null, '', '#/'); route(); }
   pull();
@@ -525,6 +530,7 @@ document.addEventListener('focusout', e => {
 });
 
 document.addEventListener('input', e => {
+  if (e.target.id === 'tok') { clearTimeout(autoT); if (e.target.value.trim().length >= 6) autoT = setTimeout(() => saveKey(true), 350); return; }
   if (e.target.dataset && e.target.dataset.add !== undefined) e.target.parentNode.classList.toggle('typing', !!e.target.value || !!pend[e.target.dataset.add]);
   const el = e.target, f = el.dataset && el.dataset.f; if (!f) return;
   const t = state.tasks.find(x => x.id === vid); if (!t) return;
