@@ -249,7 +249,7 @@ async function push(retry = 2) {
     const r = await gh('PUT', { message: 'tasks', content: enc(snap), ...(CFG.branch ? { branch: CFG.branch } : {}), ...(sha ? { sha } : {}) });
     if (r.ok) {
       retire(sha); sha = (await r.json()).content.sha; ls('sha', sha); ok = true;
-      if (ser() === snap) { dirty = false; ls('dirty', '0'); }
+      if (ser() === snap) { dirty = false; ls('dirty', '0'); flushInbox(); }
     } else if (retry && (r.status === 409 || r.status === 422 || r.status === 404)) {
       const g = await gh('GET');
       if (g.ok) {
@@ -268,7 +268,8 @@ async function push(retry = 2) {
   setStatus(ok ? 'ok' : 'err');
   if (again || (ok && dirty)) { again = false; schedule(400); }
 }
-async function pull() {
+async function pull() { await pullMain(); checkInbox(); }
+async function pullMain() {
   if (!token || busy) return;
   if (dirty) return push();
   busy = true; setStatus('busy');
@@ -285,6 +286,46 @@ async function pull() {
     }
   } catch (e) {}
   busy = false; setStatus(ok ? 'ok' : 'err');
+}
+
+/* ---------- inbox: tasks dropped as files in todo-data/inbox/*.json ---------- */
+let inboxBusy = false; const toDelete = [];
+const nrm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+function catByName(name) {
+  const leaves = state.cats.filter(c => !state.cats.some(x => x.parent === c.id));
+  const full = c => (c.parent && cat(c.parent) ? cat(c.parent).name : '') + c.name;
+  const n = nrm(name);
+  const hit = n && (leaves.find(c => nrm(c.name) === n) || leaves.find(c => nrm(full(c)) === n) || leaves.find(c => nrm(c.name).includes(n) || n.includes(nrm(c.name))));
+  return (hit || leaves.find(c => nrm(c.name).startsWith('other')) || leaves[0]).id;
+}
+async function checkInbox() {
+  if (!token || inboxBusy) return; inboxBusy = true;
+  try {
+    const r = await gh('GET', null, 'contents/inbox'); if (!r.ok) return;
+    const list = (await r.json()).filter(f => f.type === 'file' && /\.json$/i.test(f.name));
+    let added = 0;
+    for (const f of list) {
+      const id = 'ib' + f.name.replace(/\.json$/i, '').replace(/[^\w-]/g, '').slice(0, 40);
+      if (!state.tasks.some(t => t.id === id)) {
+        const raw = await fetch(API + 'contents/' + f.path.split('/').map(encodeURIComponent).join('/'), { cache: 'no-store', headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github.raw' } });
+        if (!raw.ok) continue;
+        const txt = await raw.text(); let d; try { d = JSON.parse(txt); } catch (e) { d = { title: txt }; }
+        const title = String(d.title || '').trim();
+        if (title) {
+          state.tasks.push({ id, cat: catByName(d.category || d.cat), title, notes: String(d.notes || ''), done: false, created: Date.now(), ...(/^\d{4}-\d{2}-\d{2}$/.test(d.due || '') ? { due: d.due } : {}) });
+          added++;
+        }
+      }
+      if (!toDelete.some(x => x.path === f.path)) toDelete.push({ path: f.path, sha: f.sha });
+    }
+    if (added) { save(200); render(); } else flushInbox();
+  } catch (e) {} finally { inboxBusy = false; }
+}
+function flushInbox() {
+  while (toDelete.length) {
+    const f = toDelete.shift();
+    fetch(API + 'contents/' + f.path.split('/').map(encodeURIComponent).join('/'), { method: 'DELETE', headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' }, body: JSON.stringify({ message: 'inbox processed', sha: f.sha }) }).catch(() => {});
+  }
 }
 
 /* ---------- helpers ---------- */
