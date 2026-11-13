@@ -225,6 +225,25 @@ const gh = (method, body, p = 'contents/' + CFG.path) =>
   });
 
 let timer, busy = false, again = false;
+let base = ls('base') || null; // last version both this device and GitHub agreed on
+function setBase(t) { base = t; try { ls('base', t); } catch (e) {} }
+// three-way merge: keep changes from both sides; a side "changed" an item if it differs from base
+function merge3(b, loc, rem) {
+  const list = key => {
+    const B = new Map(((b && b[key]) || []).map(x => [x.id, JSON.stringify(x)]));
+    const L = new Map((loc[key] || []).map(x => [x.id, x])), R = new Map((rem[key] || []).map(x => [x.id, x]));
+    const ids = [...new Set([...R.keys(), ...L.keys()])], out = [];
+    for (const id of ids) {
+      const l = L.get(id), r = R.get(id), bb = B.get(id);
+      const lc = l && (!b || bb === undefined || JSON.stringify(l) !== bb), rc = r && (!b || bb === undefined || JSON.stringify(r) !== bb);
+      if (l && r) out.push(b && lc && !(rc && bb === undefined) ? l : r);
+      else if (l) { if (!b || bb === undefined || lc) out.push(l); }      // new here, or edited here after being deleted there
+      else if (r) { if (!b || bb === undefined || rc) out.push(r); }      // new there, or edited there after being deleted here
+    }
+    return out;
+  };
+  return { ...rem, cats: list('cats'), tasks: list('tasks'), imported: [...new Set([...(rem.imported || []), ...(loc.imported || [])])] };
+}
 const oldShas = new Set(JSON.parse(ls('old') || '[]'));
 function retire(x) { if (!x) return; oldShas.add(x); ls('old', JSON.stringify([...oldShas].slice(-50))); }
 function setStatus(s) { status = s; const d = document.querySelector('.dot'); if (d) d.className = 'dot ' + s; }
@@ -248,16 +267,16 @@ async function push(retry = 2) {
     const snap = ser();
     const r = await gh('PUT', { message: 'tasks', content: enc(snap), ...(CFG.branch ? { branch: CFG.branch } : {}), ...(sha ? { sha } : {}) });
     if (r.ok) {
-      retire(sha); sha = (await r.json()).content.sha; ls('sha', sha); ok = true;
+      retire(sha); sha = (await r.json()).content.sha; ls('sha', sha); ok = true; setBase(snap);
       if (ser() === snap) { dirty = false; ls('dirty', '0'); flushInbox(); }
     } else if (retry && (r.status === 409 || r.status === 422 || r.status === 404)) {
       const g = await gh('GET');
       if (g.ok) {
         const j = await g.json(); sha = j.sha;
-        try { // keep tasks the Slack sync added meanwhile
-          const rem = JSON.parse(dec(j.content)), mine = new Set(state.tasks.map(t => t.id)), imp = new Set(state.imported || []);
-          (rem.tasks || []).forEach(t => { if (t.src && !mine.has(t.id) && !imp.has(t.src)) state.tasks.push(t); });
-          state.imported = [...new Set([...(state.imported || []), ...(rem.imported || [])])];
+        try { // someone else saved meanwhile: merge instead of overwriting
+          const txt = dec(j.content), rem = JSON.parse(txt);
+          state = merge3(base ? JSON.parse(base) : null, state, rem); migrate(); setBase(txt);
+          ls('state', ser()); render();
         } catch (e) {}
       }
       else if (g.status === 404) { sha = null; if (CFG.branch) await ensureBranch(); }
@@ -282,7 +301,7 @@ async function pullMain() {
       if (oldShas.has(j.sha) || j.sha === sha) { busy = false; setStatus('ok'); return; } // stale or unchanged
       sha = j.sha; ls('sha', sha);
       const txt = dec(j.content);
-      if (!dirty && txt !== ser()) { state = JSON.parse(txt); ls('state', ser()); if (migrate()) save(300); render(); }
+      if (!dirty) { setBase(txt); if (txt !== ser()) { state = JSON.parse(txt); ls('state', ser()); if (migrate()) save(300); render(); } }
     }
   } catch (e) {}
   busy = false; setStatus(ok ? 'ok' : 'err');
